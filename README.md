@@ -6,6 +6,16 @@ The sections below document earlier implementation stages; statements about miss
 
 Независимая ончейн-аналитика JURY. Архитектурный референс — Pepegun Analytics, но отдельная модель данных и интерфейс. Целевая публикация: GitHub Pages (`docs/`). В этой версии нет ИИ, MCP, Wallet Agent, npm-зависимостей, браузерных API-ключей или обязательного постоянно работающего сервера. Источник блокчейна — публичный Toncenter v3 (опциональный API-ключ только для сборщика). Python 3.10+ и Node.js 22 для тестов.
 
+## DEX / aggregator coverage requirement
+
+Token transfer discovery is global by JURY master, independent of venue. Endpoint swap classification does not whitelist DEX names; unsupported provider action shapes remain unresolved, not silently counted as direct trades. Track the actual pool/protocol separately from the initiating aggregator and the final recipient; never count routing legs, fees, refunds, LP or staking operations as additional user swaps.
+
+Explicit regression scope: moon.cx CPMM and CLMM, STON.fi V1/V2, DeDust legacy/V2, Tonstakers as a potential route leg, and any other detected DEX or aggregator (including Omniston). Moon.cx offers its own DEX and an aggregation interface; use of Omniston by Moon.cx is **unverified**, and must not be inferred from similar routing functionality. Do not reuse DeDust-specific settlement rules for Moon.cx. Provider venue labels alone do not prove protocol support or completeness.
+
+References: https://docs.moon.cx/protocol/dex ; https://www.npmjs.com/package/@moon-cx/sdk ; https://github.com/ton-blockchain/abis ; https://docs.ston.fi/developer-section/omniston .
+
+The venue coverage report enumerates provider-reported classified swap labels from validated history including repair overlays. Zero observed labels does not establish absence of trades: unknown action schemas, unclassified transfers, and intermediate routing are not covered by this count. Explicit Moon.cx decoding requires actual JURY traces and verified contract ABI / message semantics before claiming support.
+
 ## Запуск на тестовом сервере
 
 ```sh

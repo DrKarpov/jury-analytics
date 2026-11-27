@@ -1,0 +1,32 @@
+name: Inspect DEX venue coverage (read only)
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/venue-coverage.yml'
+permissions:
+  contents: read
+jobs:
+  inventory:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: data
+          path: history
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python3 -m unittest discover -s tests -p test_venue_coverage.py -v
+      - run: python3 scripts/venue_coverage.py --store history --out data/venue-coverage.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: venue-coverage
+          path: data/venue-coverage.json
+          if-no-files-found: error
