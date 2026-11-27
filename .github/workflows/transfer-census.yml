@@ -53,19 +53,25 @@ jobs:
           Path('census-boundary.json').write_text(json.dumps(preliminary,indent=2))
           def sweep(order):
               rows={}
-              for offset in range(0,n,1000):
-                  batch=page(order,offset,1000)
-                  if len(batch)!=min(1000,n-offset):raise ValueError('page size changed')
+              def window(start,end):
+                  batch=fetch('jetton/transfers',{'jetton_master':MASTER,'start_utime':start,'end_utime':end,'sort':order,'limit':1000,'offset':0})['jetton_transfers']
+                  if not isinstance(batch,list) or len(batch)>1000:raise ValueError('invalid window')
+                  if len(batch)==1000:
+                      if start==end:raise ValueError('single second saturated')
+                      mid=(start+end)//2
+                      halves=[(start,mid),(mid+1,end)]
+                      for lo,hi in (halves if order=='asc' else reversed(halves)):window(lo,hi)
+                      return
                   for r in batch:
                       tx=hash_id(r['transaction_hash'])
-                      if tx in rows:raise ValueError('duplicate transaction in census')
-                      if address(r['jetton_master'])!=address(MASTER) or not 0<integer(r['transaction_now'])<=cutoff or type(r['transaction_aborted']) is not bool:raise ValueError('invalid record')
+                      if tx in rows:raise ValueError('duplicate transaction in disjoint windows')
+                      if address(r['jetton_master'])!=address(MASTER) or not start<=integer(r['transaction_now'])<=end or type(r['transaction_aborted']) is not bool:raise ValueError('invalid record')
                       rows[tx]={'tx':tx,'lt':str(integer(r['transaction_lt'])),'time':integer(r['transaction_now']),'trace':hash_id(r['trace_id']),'amount_raw':str(integer(r['amount'])),'aborted':r['transaction_aborted'],'source':address(r['source']),'destination':address(r['destination'])}
-                  print(order, len(rows),'/',n,flush=True)
-              if page(order,n,1):raise ValueError('count changed')
+                  if batch:print(order,len(rows),'/',n,flush=True)
+              window(1794993328,cutoff)
               return rows
           a=sweep('asc');b=sweep('desc')
-          if a!=b:raise ValueError('two full external reads disagree')
+          if a!=b or len(a)!=n:raise ValueError('two full external reads or boundary count disagree')
           rows=sorted(a.values(),key=lambda x:(x['time'],int(x['lt']),x['tx']))
           report={**preliminary,'distinct_transaction_hashes':len(a),'non_aborted_transfer_transactions':sum(not x['aborted'] for x in rows),'aborted_transfer_transactions':sum(x['aborted'] for x in rows),'distinct_traces':len({x['trace'] for x in rows}),'first':rows[0] if rows else None,'last':rows[-1] if rows else None,'rows_digest':digest(rows),'two_full_reads_match':True,'scope':'Full Toncenter indexed jetton/transfer requests at timestamp cutoff, two orderings. Not proof of all successful deliveries, mints, burns or blockchain completeness.'}
           Path('census.json').write_text(json.dumps(report,indent=2))
