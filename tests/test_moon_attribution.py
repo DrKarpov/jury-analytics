@@ -1,4 +1,6 @@
-import unittest
+import sys,unittest
+from pathlib import Path
+sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'scripts'))
 from types import SimpleNamespace
 from moon_attribution import registry,scan,referral_fields
 

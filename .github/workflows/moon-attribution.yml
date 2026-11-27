@@ -5,6 +5,9 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/moon-attribution.yml'
+      - 'scripts/moon_attribution.py'
+      - 'tests/test_moon_attribution.py'
+      - 'config/moon-registry.json'
 permissions:
   contents: read
 jobs:
