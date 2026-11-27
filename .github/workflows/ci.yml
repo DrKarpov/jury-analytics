@@ -23,3 +23,16 @@ jobs:
       - run: pip install playwright==1.51.0
       - run: python -m playwright install --with-deps chromium
       - run: python tests/browser_test.py
+      - uses: actions/checkout@v4
+        if: github.event_name == 'pull_request'
+        with:
+          ref: data
+          path: history
+          persist-credentials: false
+      - name: Validate beta candidate against saved history
+        if: github.event_name == 'pull_request'
+        run: |
+          JURY_HISTORY_FIXTURES=history python3 -m unittest discover -s tests -p 'test_delivery_repair.py' -v
+          python3 scripts/public_beta.py --store history --out site --source-sha "$(git rev-parse HEAD)" --data-sha "$(git -C history rev-parse HEAD)"
+          node tests/check_public_beta.mjs site
+          python3 tests/persistent_browser_test.py site

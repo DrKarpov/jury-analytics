@@ -10,6 +10,7 @@ const a=d.evidence.current_trace_audit;
 assert.equal(a.total_traces,d.trace_count);
 assert.equal(a.matched+a.mismatch+a.unavailable+a.pending,a.total_traces);
 assert.ok(a.matched_with_swaps<=a.matched);
+assert.equal(Object.values(a.mismatch_reasons).reduce((sum,n)=>sum+n,0),a.mismatch);
 assert.equal(d.evidence.swap_audit.checked,0);
 assert.equal(d.evidence.swap_audit.status,'partial');
 assert.ok(d.evidence.seed_audit.attempted<=d.evidence.seed_audit.total_traces);

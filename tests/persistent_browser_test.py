@@ -52,6 +52,11 @@ try:
                 page.context.set_offline(False)
                 page.evaluate("document.dispatchEvent(new Event('visibilitychange'))")
                 expect(page.locator('#notice')).not_to_contain_text('Cached version')
+                if snapshot['evidence'].get('release'):
+                    page.route('**/release.json',lambda route:route.fulfill(status=404))
+                    page.evaluate("document.dispatchEvent(new Event('visibilitychange'))")
+                    expect(page.locator('#notice')).to_contain_text('Cached version')
+                    assert sum(url.endswith('/snapshot.json') for url in requests)==1
             assert not errors,errors
             page.close()
         browser.close()

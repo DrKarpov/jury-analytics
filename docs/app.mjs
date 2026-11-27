@@ -18,7 +18,7 @@ const releaseMatches = (release, snapshot) => snapshot?.cutoff === release.cutof
 
 async function checkRelease() {
     const response = await fetch('release.json', {cache: 'no-store'});
-    if (response.status === 404) return null; // Earlier static releases have no manifest.
+    if (response.status === 404 && !data?.evidence?.release) return null; // Legacy releases.
     if (!response.ok) throw Error('Release manifest unavailable');
     const manifest = await response.json();
     const hash = /^[a-f0-9]{64}$/;
@@ -59,7 +59,9 @@ async function load() {
             const response = await fetch('snapshot.json', {cache: 'no-store'});
             if (!response.ok) throw Error('Snapshot unavailable');
             const next = await verifySnapshot(await response.json());
-            if (manifest && !releaseMatches(manifest, next)) throw Error('Snapshot does not match release');
+            if (manifest ? !releaseMatches(manifest, next) : next.evidence?.release) {
+                throw Error('Snapshot does not match release');
+            }
             data = await acceptRevision(data, next);
             setDefaultDates();
             if (data.cutoff) {
