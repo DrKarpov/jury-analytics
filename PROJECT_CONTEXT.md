@@ -1,4 +1,12 @@
-# Project context — P3 staging preview
+# Project context — JURY Analytics
+
+Current mode: public beta on GitHub Pages. See [release status](ROADMAP.md) for the measured baseline, pinned source/data SHAs and open gates. See [the runbook](RUNBOOK.md) for current pipeline and reproducible artifact checks.
+
+## Historical staging notes
+
+The following sections describe work before the production GitHub repository and Pages rollout.
+
+### P3 staging preview
 
 Target: independent JURY token analytics on GitHub Pages under DrKarpov after staging acceptance. Black/red/green, local Telegram-style SVG plane, RU/EN. Pepegun Analytics is an architectural reference only. No AI, MCP, Wallet Agent, paid-service runtime dependencies or mandatory always-on server. No external repo created or published. The existing Pepegun repository is not modified.
 
