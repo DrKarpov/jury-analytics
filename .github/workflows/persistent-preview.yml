@@ -1,0 +1,44 @@
+name: Persistent history preview (unpublished)
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/persistent-preview.yml'
+permissions:
+  contents: read
+jobs:
+  preview:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: data
+          path: history
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate and build isolated preview
+        run: |
+          git -C history rev-parse HEAD
+          python3 -m unittest discover -s tests -p test_persistent_preview.py -v
+          python3 scripts/persistent_preview.py --store history --out data/preview
+          node tests/check_persistent_snapshot.mjs data/preview/snapshot.json
+      - run: pip install playwright==1.51.0
+      - run: python -m playwright install --with-deps chromium
+      - run: python tests/persistent_browser_test.py data/preview
+      - uses: actions/upload-artifact@v4
+        with:
+          name: unpublished-jury-preview
+          path: data/preview/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7

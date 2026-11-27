@@ -1,4 +1,8 @@
-# JURY Analytics — P3 (staging preview)
+# JURY Analytics — P4 (persistent history, unpublished preview)
+
+**Current status:** The public repository and dedicated `data` branch exist. The seed history has been recovered from the completed primary collection; independent audit is ongoing and differences require investigation. The incremental workflow appends validated segments and saves audit batches every 15 minutes, independent of visitors. Full re-indexing is manual only. The separate persistent preview workflow builds from a pinned data checkout, checks its integrity with JavaScript and opens the actual snapshot in Chromium. It does not deploy GitHub Pages. Seed audit results are explicitly scoped to the seed, not the current candidate. Holder and lifecycle evidence is not carried forward to an unrelated snapshot; PnL remains blocked until sufficient verification. No runtime AI/MCP or external server required.
+
+The sections below document earlier implementation stages; statements about missing repositories or unavailable live data describe those earlier stages, not the current state.
 
 Независимая ончейн-аналитика JURY. Архитектурный референс — Pepegun Analytics, но отдельная модель данных и интерфейс. Целевая публикация: GitHub Pages (`docs/`). В этой версии нет ИИ, MCP, Wallet Agent, npm-зависимостей, браузерных API-ключей или обязательного постоянно работающего сервера. Источник блокчейна — публичный Toncenter v3 (опциональный API-ключ только для сборщика). Python 3.10+ и Node.js 22 для тестов.
 
