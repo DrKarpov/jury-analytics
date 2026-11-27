@@ -9,6 +9,7 @@ from holder_state import evidence as holder_evidence
 from repair_overlay import overlay
 from payout_repair import overlay as payout_overlay
 from delivery_repair import overlay as delivery_overlay
+from revision_evidence import lineage
 
 def bundle(store):
     seed=load_seed(store)
@@ -44,6 +45,7 @@ def bundle(store):
     ev['delivery_repairs']=deliveries
     ev['holder_status']=holder_status
     ev['history_head']=h.head
+    ev['revision_lineage']=lineage(store,seed,h)
     ev['digest']=digest(ev)
     return out
 

@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/persistent-preview.yml'
+      - 'scripts/revision_evidence.py'
+      - 'docs/integrity.mjs'
 permissions:
   contents: read
 jobs:
@@ -20,6 +22,11 @@ jobs:
           ref: data
           path: history
           persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: 0a14f7a9c466d396d888d5e926e062267b1567dd
+          path: prior-history
+          persist-credentials: false
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -32,6 +39,8 @@ jobs:
           python3 -m unittest discover -s tests -p test_persistent_preview.py -v
           python3 scripts/persistent_preview.py --store history --out data/preview
           node tests/check_persistent_snapshot.mjs data/preview/snapshot.json
+          python3 scripts/persistent_preview.py --store prior-history --out data/prior-preview
+          node tests/check_revision_transition.mjs data/prior-preview/snapshot.json data/preview/snapshot.json
       - run: pip install playwright==1.51.0
       - run: python -m playwright install --with-deps chromium
       - run: python tests/persistent_browser_test.py data/preview

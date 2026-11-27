@@ -1,0 +1,18 @@
+import {readFileSync} from 'node:fs';
+import assert from 'node:assert/strict';
+import {verifySnapshot,acceptRevision,acceptNext,digest} from '../docs/integrity.mjs';
+const old=await verifySnapshot(JSON.parse(readFileSync(process.argv[2],'utf8')));
+const next=await verifySnapshot(JSON.parse(readFileSync(process.argv[3],'utf8')));
+assert.notEqual(old.digest,next.digest);
+assert.throws(()=>acceptNext(old,next));
+assert.equal(await acceptRevision(old,next),next);
+await assert.rejects(()=>acceptRevision(next,old));
+const unsigned=structuredClone(next);
+unsigned.evidence.revision_lineage.transitions={};
+const {digest:ignored,...e}=unsigned.evidence;
+unsigned.evidence.digest=await digest(e);
+await verifySnapshot(unsigned);
+await assert.rejects(()=>acceptRevision(old,unsigned),/unproven/);
+const changed=structuredClone(next);changed.transfers[0].amount_raw='1';
+await assert.rejects(()=>acceptRevision(old,changed),/historical transfer changed/);
+console.log('Verified real historical revision; rejected missing provenance, rollback and altered transfer');
