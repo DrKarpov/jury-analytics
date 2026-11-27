@@ -25,7 +25,7 @@ def fixture(routed=False):
     for x in txs:
         for m in x['messages']:
             if m['direction']!='out':continue
-            y,n=next((y,n) for y in txs if int(y['lt'])>int(x['lt']) and y['account']==m['counterparty'] for n in y['messages'] if n['direction']=='in' and n['counterparty']==x['account'] and n['opcode']==m['opcode'] and n['amount_gram']==m['amount_gram'])
+            y,n=next((y,n) for y in txs if int(y['lt'])>int(x['lt']) and y['account']==m['counterparty'] for n in y['messages'] if n['direction']=='in' and n['counterparty']==x['account'] and n['opcode']==m['opcode'] and n['amount_gram']['raw']==m['amount_gram']['raw'])
             m['message_hash']=n['message_hash']=H(x['hash']+y['hash']+m['opcode'])
             opcode=m['opcode'];idx=1 if int(x['lt'])<int(b['lt']) and (x['account']!=w or opcode!='0x0f8a7ea5') else 2
             body=m.get('body',{})
