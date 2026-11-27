@@ -14,10 +14,10 @@ from recovery import read
 
 def peer(x):
     return address(x['address'] if isinstance(x,dict) else x)
-def raw_record(t,a,b,sell,tree,event):
+def raw_record(t,a,b,sell,tree,event=None):
     by_hash=tree_index(tree,t)
     root=by_hash[t];w,p,q=a['destination'],a['source'],b['destination']
-    if event.get('event_id')!=t or event.get('in_progress') is not False:raise ValueError('event incomplete')
+    if event is not None and (event.get('event_id')!=t or event.get('in_progress') is not False):raise ValueError('event incomplete')
     def amt(n):return {'raw':str(integer(n))}
     txs=[]
     # TonAPI traces represent the internal message graph by parent-child links.
@@ -31,7 +31,7 @@ def raw_record(t,a,b,sell,tree,event):
         msgs=[]
         def msg(m,direction):
             if m.get('msg_type')!='int_msg' or m.get('bounced') is not False:raise ValueError('non-internal or bounced message')
-            return {'direction':direction,'counterparty':peer(m['source' if direction=='in' else 'destination']),'amount_gram':amt(m['value']),'opcode':m.get('op_code'),'bounced':False}
+            return {'direction':direction,'counterparty':peer(m['source' if direction=='in' else 'destination']),'amount_gram':amt(m['value']),'opcode':m.get('op_code'),'bounced':False,'body':m.get('decoded_body') or {},'message_hash':hash_id(m['hash'])}
         if parent is not None:
             m=x['in_msg'];px=parent['transaction']
             if peer(m['source'])!=peer(px['account']) or peer(m['destination'])!=account:raise ValueError('bad tree edge')
@@ -53,7 +53,7 @@ def raw_record(t,a,b,sell,tree,event):
         txs.append({'hash':h,'account':account,'lt':lt,'time':stamp,'success':True,'fee_gram':amt(x['total_fees']),'messages':msgs})
         stack.extend((c,n) for c in children)
     actions=[]
-    for x in event['actions']:
+    for x in (event or {}).get('actions',[]):
         typ=x['type']
         if typ=='JettonTransfer' and x['status']=='ok':
             d=x[typ]
@@ -61,8 +61,8 @@ def raw_record(t,a,b,sell,tree,event):
             actions.append({'type':'jetton_transfer','status':'ok','action_name':typ,'sender':peer(d['sender']),'recipient':peer(d['recipient']),'jetton':{'master':TOKEN},'amount':amt(d['amount'])})
         elif typ=='JettonSwap' and x['status']=='ok':
             actions.append({'type':'other','status':'ok','action_name':typ})
-    return {'version':1,'trace':t,'owner':w,'first':p,'second':q,'time':a['time'],
-            'source':'TonAPI finalized trace tree and event, matched against Toncenter transfers',
+    return {'version':2,'trace':t,'owner':w,'first':p,'second':q,'time':a['time'],
+            'source':'TonAPI raw trace and decoded jetton deliveries matched against Toncenter transfer index',
             'root_message':{'event_id':t,'in_progress':False,'time':a['time'],'actions':actions},
             'transactions':txs}
 
@@ -75,6 +75,7 @@ def run(store,fetch=tonapi_request,seconds=180,limit=100):
             candidates.append((t,a,b,sell))
     candidates.sort(key=lambda x:(x[1]['time'],x[0]))
     pending=folder/'attempts.json';old=read(pending) if pending.exists() else {}
+    old={t:x for t,x in old.items() if x.get('rule_version')==2}
     attempts=0;added=0;stop=None;deadline=time.monotonic()+seconds
     if fetch is tonapi_request:fetch=partial(fetch,deadline=deadline)
     for t,a,b,sell in candidates:
@@ -83,16 +84,15 @@ def run(store,fetch=tonapi_request,seconds=180,limit=100):
         attempts+=1
         try:
             tree=fetch('traces/'+t,{})
-            event=fetch('events/'+t,{})
-            r=raw_record(t,a,b,sell,tree,event)
+            r=raw_record(t,a,b,sell,tree)
             buy,cycle=verify(r,h.traces[t],h.events[t])
         except OSError as e:
             stop=type(e).__name__;break
         except (ValueError,KeyError,TypeError,AttributeError) as e:
-            old[t]={'reason':type(e).__name__+': '+str(e)[:160],'at':int(time.time())}
+            old[t]={'rule_version':2,'reason':type(e).__name__+': '+str(e)[:160],'at':int(time.time())}
             continue
         publish(r,verified/(t+'.json'));known.add(t);added+=1
-        print('VERIFIED CYCLE',t,cycle['native_net_raw'],flush=True)
+        if added<=3 or added%25==0:print('VERIFIED CYCLE',t,cycle['native_net_raw'],flush=True)
     publish(old,pending)
     report={'history_head':h.head,'cutoff':h.cutoff,'traces_examined':len(h.traces),
             'candidate_cycles':len(candidates),'verified_candidates':sum(t in known for t,*_ in candidates),

@@ -30,11 +30,11 @@ def verify(record,rows,events):
     pairs=candidate_pairs(rows,events)
     if len(pairs)!=1:raise ValueError('cycle baseline mismatch')
     a,b,sell=pairs[0];t=record['trace'];stamp=record['time'];w,p,q=map(address,(record['owner'],record['first'],record['second']))
-    if record['version']!=1 or t!=a['trace'] or (a['source'],a['destination'],b['destination'])!=(p,w,q) or any(x['time']!=stamp for x in (a,b,sell)):raise ValueError('cycle identity mismatch')
+    if record['version'] not in (1,2) or t!=a['trace'] or (a['source'],a['destination'],b['destination'])!=(p,w,q) or any(x['time']!=stamp for x in (a,b,sell)):raise ValueError('cycle identity mismatch')
     obs=record['root_message']
     if obs['event_id']!=t or obs['in_progress'] is not False or obs['time']!=stamp:raise ValueError('event mismatch')
     transfers=[x for x in obs['actions'] if x['type']=='jetton_transfer' and x['status']=='ok' and address(x['jetton']['master'])==TOKEN and address(x['sender'])==p and address(x['recipient'])==w and x['amount']['raw']==a['amount_raw']]
-    if len(transfers)!=1 or not any(x['action_name']=='JettonSwap' and x['status']=='ok' for x in obs['actions']):raise ValueError('event token flow absent')
+    if record['version']==1 and (len(transfers)!=1 or not any(x['action_name']=='JettonSwap' and x['status']=='ok' for x in obs['actions'])):raise ValueError('event token flow absent')
     txs={hash_id(x['hash']):x for x in record['transactions']}
     if len(txs)!=len(record['transactions']) or any(x['time']!=stamp or x['success'] is not True for x in txs.values()):raise ValueError('raw transaction mismatch')
     root=txs[t]
@@ -77,6 +77,30 @@ def verify(record,rows,events):
     if address(first_out['counterparty'])!=address(sb['account']):raise ValueError('different intermediate jetton wallet')
     second_out=unique(messages(sb,'out','0x178d4519'))
     if address(second_out['counterparty'])==address(sa['account']):raise ValueError('unexpected return to first pool')
+    if record['version']==2:
+        # Both independent raw transfer instructions and their delivered
+        # internal_transfer messages must agree with indexed owners, amount
+        # and query ID. No dependence on indexer action classification.
+        def instruction(x,source,destination,qty):
+            m=unique(messages(x,'in','0x0f8a7ea5',source))
+            d=m['body']
+            if address(d['destination'])!=destination or integer(d['amount'])!=qty:raise ValueError('decoded transfer mismatch')
+            return integer(d['query_id'])
+        def delivery(x,source,destination,qty,qid):
+            m=unique(messages(x,'in','0x178d4519',source))
+            d=m['body']
+            if integer(d['amount'])!=qty or integer(d['query_id'])!=qid or address(d['from'])!=destination:raise ValueError('decoded internal transfer mismatch')
+        qty=integer(a['amount_raw'])
+        qa=instruction(sa,p,w,qty);qb=instruction(sb,w,q,qty)
+        da=unique([x for x in txs.values() if address(x['account'])==address(first_out['counterparty']) and integer(sa['lt'])<integer(x['lt'])<integer(sb['lt']) and messages(x,'in','0x178d4519',address(sa['account']))])
+        db=unique([x for x in txs.values() if address(x['account'])==address(second_out['counterparty']) and integer(x['lt'])>integer(sb['lt']) and messages(x,'in','0x178d4519',address(sb['account']))])
+        delivery(da,address(sa['account']),p,qty,qa);delivery(db,address(sb['account']),w,qty,qb)
+        # The received token must notify the owner, which then initiates the
+        # second transfer. Require the destination owner to be notified too.
+        for x,owner,source,qid in ((da,w,p,qa),(db,q,w,qb)):
+            notice=unique(messages(x,'out','0x7362d09c',owner))
+            body=notice['body']
+            if integer(body['amount'])!=qty or integer(body['query_id'])!=qid or address(body['sender'])!=source:raise ValueError('decoded notification mismatch')
     proof=digest(record)
     buy={'id':digest({'trace':t,'transfer_tx':a['tx'],'rule':'observed_cycle_buy_v1'}),'trace':t,'time':stamp,'kind':'buy','wallet':w,'initiator':w,'amount_raw':a['amount_raw'],'quote_asset':'UNKNOWN','quote_raw':'0','quote_status':'unresolved','venue':'unknown','transfer_tx':a['tx']}
     return buy,{'trace':t,'wallet':w,'time':stamp,'amount_raw':a['amount_raw'],'buy_transfer':a['tx'],'sell_transfer':b['tx'],'native_received_raw':str(received),'native_sent_raw':str(sent_total),'wallet_fees_raw':str(fees),'native_net_raw':str(received-sent_total-fees),'buy_quote_status':'unresolved','proof_digest':proof,'scope':'connected wallet message cashflow; not gas-exclusive first DEX quote'}

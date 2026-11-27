@@ -33,7 +33,7 @@ jobs:
           TONAPI_API_KEY: ${{ secrets.TONAPI_API_KEY }}
         run: |
           python3 -m unittest discover -s source/tests -p 'test_arbitrage.py' -v
-          python3 -u source/scripts/arbitrage_scan.py --store store --seconds 150 --limit 100
+          python3 -u source/scripts/arbitrage_scan.py --store store --seconds 180 --limit 150
           bash source/scripts/checkpoint.sh store 'Checkpoint verified arbitrage routes' arbitrage/v1
           python3 -u source/scripts/arbitrage_scan.py --store store --seconds 150 --limit 100
           bash source/scripts/checkpoint.sh store 'Checkpoint verified arbitrage routes' arbitrage/v1
