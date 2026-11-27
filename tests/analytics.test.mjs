@@ -1,0 +1,2 @@
+import assert from 'node:assert/strict';import {range,summarize,format,csv}from'../docs/analytics.mjs';
+const e={time:100,kind:'buy',wallet:'w',amount_raw:'1000000001',quote_asset:'GRAM',quote_raw:'2000000000',trace:'t'};const s=summarize([e,{...e,time:101,kind:'sell'}],[],[100,100]);assert.equal(s.buy,1);assert.equal(s.sell,0);assert.equal(s.buyQty,1000000001n);assert.equal(s.quote,2000000000n);assert.equal(format(-1000000001n,'en'),'-1.00');assert.deepEqual(range('6h',30000),[8401,30000]);assert.match(csv([e]),/1000000001/);console.log('7 analytics assertions passed');
