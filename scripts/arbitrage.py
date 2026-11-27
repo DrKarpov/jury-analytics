@@ -8,8 +8,14 @@ from provider import address
 from recovery import read
 
 FOLDER=ROOT/'config'/'arbitrage-evidence'
-def evidence_records():
-    return [read(p) for p in sorted(FOLDER.glob('*.json'))]
+def evidence_records(store=None):
+    records={r['trace']:r for r in (read(p) for p in sorted(FOLDER.glob('*.json')))}
+    if store is not None:
+        for p in sorted((store/'arbitrage'/'v1'/'verified').glob('*.json')):
+            r=read(p)
+            if p.stem!=r['trace'] or r['trace'] in records:raise ValueError('duplicate cycle proof')
+            records[r['trace']]=r
+    return list(records.values())
 
 def candidate_pairs(rows,events):
     if len(rows)!=2 or any(r['aborted'] for r in rows):return []
@@ -75,9 +81,9 @@ def verify(record,rows,events):
     buy={'id':digest({'trace':t,'transfer_tx':a['tx'],'rule':'observed_cycle_buy_v1'}),'trace':t,'time':stamp,'kind':'buy','wallet':w,'initiator':w,'amount_raw':a['amount_raw'],'quote_asset':'UNKNOWN','quote_raw':'0','quote_status':'unresolved','venue':'unknown','transfer_tx':a['tx']}
     return buy,{'trace':t,'wallet':w,'time':stamp,'amount_raw':a['amount_raw'],'buy_transfer':a['tx'],'sell_transfer':b['tx'],'native_received_raw':str(received),'native_sent_raw':str(sent_total),'wallet_fees_raw':str(fees),'native_net_raw':str(received-sent_total-fees),'buy_quote_status':'unresolved','proof_digest':proof,'scope':'connected wallet message cashflow; not gas-exclusive first DEX quote'}
 
-def overlay(h):
+def overlay(h,store=None):
     verified=[]
-    for r in evidence_records():
+    for r in evidence_records(store):
         t=r['trace']
         if t not in h.traces:continue
         buy,cycle=verify(r,h.traces[t],h.events.get(t,[]))

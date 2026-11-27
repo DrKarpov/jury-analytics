@@ -26,7 +26,7 @@ def lineage(store,seed,corrected):
         if r['digest']!=digest({k:v for k,v in r.items() if k!='digest'}):raise ValueError('repair checksum mismatch')
         proofs[r['trace']].append(r['digest'])
     from arbitrage import evidence_records
-    for r in evidence_records():
+    for r in evidence_records(store):
         proofs[r['trace']].append(digest(r))
     for t in sorted(h.traces):
         a,b=state(h,t),state(corrected,t)

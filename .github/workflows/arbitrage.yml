@@ -1,0 +1,39 @@
+name: Verify missing arbitrage legs across history
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/arbitrage_scan.py'
+      - '.github/workflows/arbitrage.yml'
+  schedule:
+    - cron: '44 * * * *'
+permissions:
+  contents: write
+concurrency:
+  group: jury-persistent-data
+  cancel-in-progress: false
+jobs:
+  scan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: source
+      - uses: actions/checkout@v4
+        with:
+          ref: data
+          path: store
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify reference and process all matching traces in bounded batches
+        env:
+          TONAPI_API_KEY: ${{ secrets.TONAPI_API_KEY }}
+        run: |
+          python3 -m unittest discover -s source/tests -p 'test_arbitrage.py' -v
+          python3 -u source/scripts/arbitrage_scan.py --store store --seconds 150 --limit 100
+          bash source/scripts/checkpoint.sh store 'Checkpoint verified arbitrage routes' arbitrage/v1
+          python3 -u source/scripts/arbitrage_scan.py --store store --seconds 150 --limit 100
+          bash source/scripts/checkpoint.sh store 'Checkpoint verified arbitrage routes' arbitrage/v1

@@ -2,7 +2,7 @@ name: Publish provisional JURY dashboard
 on:
   workflow_dispatch:
   workflow_run:
-    workflows: ['Update and audit persistent history', 'Audit current JURY trace revisions', 'Reconstruct JURY genesis and delivery receipts']
+    workflows: ['Update and audit persistent history', 'Audit current JURY trace revisions', 'Reconstruct JURY genesis and delivery receipts', 'Verify missing arbitrage legs across history']
     types: [completed]
     branches: [main]
   push:
