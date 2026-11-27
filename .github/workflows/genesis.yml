@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/genesis.yml'
+      - 'scripts/wallet_history.py'
   schedule:
     - cron: '12 * * * *'
 permissions:
@@ -16,7 +17,7 @@ jobs:
   genesis:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
-    timeout-minutes: 11
+    timeout-minutes: 17
     steps:
       - uses: actions/checkout@v4
         with:
@@ -47,3 +48,11 @@ jobs:
         run: |
           python3 -u source/scripts/genesis_checkpoint.py receipts --store store --seconds 200 --limit 60
           bash source/scripts/checkpoint.sh store 'Checkpoint genesis delivery receipts' ':(glob)genesis/v1/receipts/*.json' genesis/v1/pending.json genesis/v1/status.json
+      - name: Traverse independently compared wallet account chains
+        timeout-minutes: 5
+        env:
+          TONCENTER_API_KEY: ''
+          TONAPI_API_KEY: ${{ secrets.TONAPI_API_KEY }}
+        run: |
+          python3 -u source/scripts/wallet_history.py --store store --pages 24 --size 50 --seconds 200
+          bash source/scripts/checkpoint.sh store 'Checkpoint linked JURY wallet history' ':(glob)genesis/v1/wallet-history/accounts/**/*.json' genesis/v1/wallet-history/pending.json genesis/v1/wallet-history/status.json
