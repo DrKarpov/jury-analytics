@@ -62,4 +62,4 @@ jobs:
           TONAPI_API_KEY: ${{ secrets.TONAPI_API_KEY }}
         run: |
           python3 -u source/scripts/holder_state.py --store store
-          bash source/scripts/checkpoint.sh store 'Checkpoint independent holder observation' holders/latest.json holders/status.json
+          bash source/scripts/checkpoint.sh store 'Checkpoint independent holder observation' holders/latest.json holders/status.json ':(glob)holders/daily/*.json'

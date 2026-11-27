@@ -11,10 +11,11 @@ git diff --cached --quiet
 if [[ -z "$(git status --porcelain --untracked-files=all -- "$@")" ]]; then
     exit 0
 fi
-git add -A -- "$@"
+git ls-files -z --cached --others --exclude-standard -- "$@" |
+    git --literal-pathspecs add -A --pathspec-from-file=- --pathspec-file-nul
 git diff --cached --quiet && exit 0
 
-if [[ -n "$(git diff --cached --name-only --diff-filter=DMRT -- seed updates audit current-audit)" ]]; then
+if [[ -n "$(git diff --cached --name-only --diff-filter=DMRT -- seed updates audit current-audit holders/daily repairs repair-attempts)" ]]; then
     echo 'Refusing to change immutable history or audit records' >&2
     exit 1
 fi
