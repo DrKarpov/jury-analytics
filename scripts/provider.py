@@ -17,7 +17,7 @@ def address(value):
     return str(int.from_bytes(b[1:2],'big',signed=True))+':'+b[2:34].hex()
 
 def request(endpoint,params):
-    headers={'Accept':'application/json'}
+    headers={'Accept':'application/json', 'User-Agent':'JURY-Analytics/1.0'}
     if os.environ.get('TONCENTER_API_KEY'): headers['X-API-Key']=os.environ['TONCENTER_API_KEY']
     for attempt in range(5):
         try:
@@ -42,7 +42,7 @@ def normalized(row):
 
 
 def tonapi_request(endpoint,params):
-    headers={'Accept':'application/json'}
+    headers={'Accept':'application/json', 'User-Agent':'JURY-Analytics/1.0'}
     if os.environ.get('TONAPI_API_KEY'): headers['Authorization']='Bearer '+os.environ['TONAPI_API_KEY']
     url='https://tonapi.io/v2/'+endpoint+'?'+urllib.parse.urlencode(params,doseq=True)
     for attempt in range(3):
