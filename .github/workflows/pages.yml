@@ -59,7 +59,9 @@ jobs:
           python3 scripts/public_beta.py --store history --out site --source-sha "$source" --data-sha "$data"
           node tests/check_public_beta.mjs site
       - run: pip install playwright==1.51.0
-      - run: python -m playwright install --with-deps chromium
+      # Ubuntu hosted runners already include the Chromium system libraries.
+      # Do not invoke apt against unrelated third-party package repositories.
+      - run: python -m playwright install chromium
       - run: python tests/persistent_browser_test.py site
       - uses: actions/upload-pages-artifact@v3
         with:
