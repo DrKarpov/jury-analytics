@@ -1,4 +1,4 @@
-name: Recover and audit saved history
+name: Update and audit persistent history
 on:
   workflow_dispatch:
   push:
@@ -16,7 +16,7 @@ concurrency:
 jobs:
   recover-audit:
     runs-on: ubuntu-24.04
-    timeout-minutes: 12
+    timeout-minutes: 14
     steps:
       - uses: actions/checkout@v4
         with:
@@ -31,7 +31,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Validate checkpoint implementation
-        run: python3 -m unittest discover -s source/tests -p test_recovery.py -v
+        run: python3 -m unittest discover -s source/tests -v
       - name: Check for saved seed
         id: seed
         run: |
@@ -56,11 +56,31 @@ jobs:
           git -C store add seed
           git -C store commit -m 'Recover primary JURY history from staging artifact'
           git -C store push origin HEAD:data
+      - name: Collect new transfers and classify affected traces
+        id: incremental
+        timeout-minutes: 6
+        env:
+          TONCENTER_API_KEY: ''
+        run: python3 -u source/scripts/incremental.py --store store
+      - name: Persist incremental segment
+        if: steps.incremental.outcome == 'success'
+        run: |
+          git -C store config user.name 'github-actions[bot]'
+          git -C store config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git -C store add -A
+          if ! git -C store diff --cached --quiet; then
+            git -C store commit -m 'Checkpoint incremental primary history'
+            git -C store push origin HEAD:data
+          fi
       - name: Audit next bounded batch
+        id: audit
+        if: ${{ !cancelled() && steps.incremental.outcome != 'skipped' }}
+        timeout-minutes: 6
         env:
           TONAPI_API_KEY: ${{ secrets.TONAPI_API_KEY }}
         run: python3 -u source/scripts/recovery.py audit --store store --limit 100 --seconds 240
       - name: Persist completed audit checkpoint
+        if: ${{ !cancelled() && steps.audit.outcome == 'success' }}
         run: |
           git -C store config user.name 'github-actions[bot]'
           git -C store config user.email '41898282+github-actions[bot]@users.noreply.github.com'

@@ -6,12 +6,6 @@ on:
         description: 'Use configured Toncenter API key (optional)'
         type: boolean
         default: false
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/staging-index.yml'
-      - 'scripts/indexer.py'
-      - 'scripts/provider.py'
 permissions:
   contents: read
 concurrency:
