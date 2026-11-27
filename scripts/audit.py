@@ -10,9 +10,15 @@ def tonapi_swaps(event, expected_trace):
     # getEvent accepts any transaction hash, but the response may use another event ID.
     # A mismatch is unverified rather than silently comparing unrelated events.
     if hash_id(event['event_id']) != expected_trace: raise ValueError('event identity mismatch')
+    actions=event['actions']
+    if not isinstance(actions,list): raise ValueError('invalid event actions')
     result=Counter()
-    for a in event['actions']:
-        if a['type']!='JettonSwap' or a['status']!='ok': continue
+    for a in actions:
+        if not isinstance(a,dict) or not isinstance(a.get('type'),str) or not isinstance(a.get('status'),str):
+            raise ValueError('invalid event action')
+        if a['type']!='JettonSwap': continue
+        if a['status']=='failed': continue
+        if a['status']!='ok': raise ValueError('invalid swap status')
         d=a['JettonSwap']
         ai=address(d['jetton_master_in']['address']) if d.get('jetton_master_in') else 'GRAM'
         ao=address(d['jetton_master_out']['address']) if d.get('jetton_master_out') else 'GRAM'
@@ -81,13 +87,38 @@ def holders_api(fetch, size=1000):
 
 
 def holder_snapshot(center=request, alternate=tonapi_request):
-    start=int(time.time()); first=holders_center(center); other=holders_api(alternate); last=holders_center(center)
-    # No fixed block API: require identical reads on either side of the independent source.
-    if first!=last or first!=other: raise ValueError('holder observations differ; no snapshot published')
-    info=alternate('jettons/'+TOKEN,{})
-    if address(info['metadata']['address'])!=TOKEN: raise ValueError('wrong supply token')
-    supply=integer(info['total_supply']); observed=sum(b for _,b in first.values())
-    if observed!=supply: raise ValueError('holder balance sum differs from supply')
-    owners=defaultdict(int)
-    for owner,balance in first.values(): owners[owner]+=balance
-    return {'scope':'current positive balances, not historical or block-pinned','started_at':start,'observed_at':int(time.time()),'supply_raw':str(supply),'wallet_count':len(first),'owner_count':len(owners),'owners':[{'owner':a,'balance_raw':str(b)} for a,b in sorted(owners.items(),key=lambda x:(-x[1],x[0]))]}
+    start = int(time.time())
+    first = holders_center(center)
+    other = holders_api(alternate)
+    info = alternate('jettons/' + TOKEN, {})
+    masters = center('jetton/masters', {'address': MASTER, 'limit': 2})['jetton_masters']
+    last = holders_center(center)
+    # No fixed block API. The matching Toncenter reads bracket TonAPI and supply.
+    if first != last or first != other:
+        raise ValueError('holder observations differ; no snapshot published')
+    if address(info['metadata']['address']) != TOKEN or len(masters) != 1 or address(masters[0]['address']) != TOKEN:
+        raise ValueError('wrong supply token')
+    decimals = integer(info['metadata']['decimals'])
+    if decimals != 9:
+        raise ValueError('unexpected JURY decimals')
+    supply = integer(info['total_supply'])
+    center_supply = integer(masters[0]['total_supply'])
+    observed = sum(balance for _, balance in first.values())
+    if supply != center_supply or observed != supply:
+        raise ValueError('holder balance sum or independent supply differs')
+    owners = defaultdict(int)
+    for owner, balance in first.values():
+        owners[owner] += balance
+    return {
+        'scope': 'current positive balances, not historical or block-pinned',
+        'started_at': start,
+        'observed_at': int(time.time()),
+        'supply_raw': str(supply),
+        'decimals': decimals,
+        'wallet_count': len(first),
+        'owner_count': len(owners),
+        'owners': [
+            {'owner': owner, 'balance_raw': str(balance)}
+            for owner, balance in sorted(owners.items(), key=lambda row: (-row[1], row[0]))
+        ],
+    }

@@ -1,6 +1,7 @@
 """Persist independent current holder observations, never overwrite a good observation on failure."""
 import argparse, time, urllib.error
 from pathlib import Path
+from datetime import datetime, timezone
 from audit import holder_snapshot
 from indexer import MASTER, digest, publish, integer
 from provider import address
@@ -12,6 +13,8 @@ def validate(record):
     if digest({k:v for k,v in record.items() if k!='digest'})!=record.get('digest'):
         raise ValueError('holder observation checksum mismatch')
     h=record['observation']
+    if h.get('decimals',9)!=9:
+        raise ValueError('unexpected JURY decimals')
     if not 0<h['started_at']<=h['observed_at']:
         raise ValueError('holder observation time mismatch')
     owners=h['owners']; seen=set(); total=0
@@ -39,6 +42,13 @@ def refresh(store, observe=holder_snapshot):
         report={'status':'unavailable_or_mismatch','attempted_at':attempted,'reason':reason,
                 'last_valid_digest':prior['digest'] if prior else None}
     else:
+        day=datetime.fromtimestamp(h['observed_at'],timezone.utc).date().isoformat()
+        daily=folder/'daily'/f'{day}.json'
+        if daily.exists():
+            validate(read(daily))
+        else:
+            daily.parent.mkdir(exist_ok=True)
+            publish(record,daily)
         publish(record,latest)
         report={'status':'observations_match','attempted_at':attempted,'last_valid_digest':record['digest']}
     publish(report,status)

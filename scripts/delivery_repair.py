@@ -3,6 +3,8 @@ Not a net wallet or frontend attribution rule. Failed later legs remain unresolv
 """
 import argparse,json,time
 from pathlib import Path
+from functools import partial
+from repair_attempt import checked_negative_attempt
 from indexer import classify,digest,publish,hash_id,integer
 from provider import address,request,tonapi_request
 from recovery import load_seed,read
@@ -83,13 +85,22 @@ def overlay(store,seed,h,ctx=None):
     return stats,active
 
 def run(store,center=request,alternate=tonapi_request,limit=15,seconds=120):
+    if not 1<=limit<=100 or seconds<=0:raise ValueError('invalid repair budget')
     seed=load_seed(store);ctx=contexts(store,seed);rows,events,unresolved,audit=ctx
     h=load_history(store,seed);alias_overlay(store,seed,h);payout_overlay(store,seed,h);overlay(store,seed,h,ctx)
     folder=store/'repairs'/RULE;folder.mkdir(parents=True,exist_ok=True)
     attempts=store/'repair-attempts'/RULE;attempts.mkdir(parents=True,exist_ok=True)
     deadline=time.monotonic()+seconds;examined=installed=0
+    if center is request:
+        center = partial(request, deadline=deadline)
+    if alternate is tonapi_request:
+        alternate = partial(tonapi_request, deadline=deadline)
     for t,a in sorted(audit.items()):
-        if category(a)!='primary_missing' or (folder/(t+'.json')).exists() or (attempts/(t+'.json')).exists():continue
+        if category(a)!='primary_missing' or (folder/(t+'.json')).exists():continue
+        attempt=attempts/(t+'.json')
+        if attempt.exists():
+            checked_negative_attempt(attempt,seed['digest'],t,RULE,a)
+            continue
         if examined>=limit or time.monotonic()>=deadline:break
         if h.events.get(t,[])!=events[t] or h.unresolved.get(t)!=unresolved.get(t):continue
         examined+=1
@@ -112,4 +123,9 @@ def run(store,center=request,alternate=tonapi_request,limit=15,seconds=120):
     publish(stats,store/'delivery-status.json');print(json.dumps(stats),flush=True)
 
 if __name__=='__main__':
-    p=argparse.ArgumentParser();p.add_argument('--store',type=Path,required=True);a=p.parse_args();run(a.store)
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--store', type=Path, required=True)
+    parser.add_argument('--limit', type=int, default=15)
+    parser.add_argument('--seconds', type=int, default=120)
+    args = parser.parse_args()
+    run(args.store, limit=args.limit, seconds=args.seconds)

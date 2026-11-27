@@ -15,7 +15,12 @@ export async function verifySnapshot(d){
  for(const r of d.transfers)if(!/^\d+$/.test(r.lt)||BigInt(r.lt)<=0n)throw Error('invalid LT');
  for(const e of d.events)if(!hash.test(e.id)||e.time<=0||BigInt(e.amount_raw)<=0n||(e.kind!=='transfer'&&BigInt(e.quote_raw)<=0n))throw Error('invalid operation');
  for(const u of d.unresolved){if(u.kind!=='unresolved'||!traces.has(u.trace)||seen.has(u.trace)||!Number.isSafeInteger(u.time)||u.time<=0||u.time>d.cutoff)throw Error('invalid unresolved trace');seen.add(u.trace)}
- if(evidence){if(!hash.test(evidence.digest))throw Error('missing evidence digest');const {digest:h,...rest}=evidence;if(await digest(rest)!==h)throw Error('evidence digest mismatch')}
+ if(evidence){
+  if(!hash.test(evidence.digest))throw Error('missing evidence digest');
+  const {digest:h,...rest}=evidence;
+  if(await digest(rest)!==h)throw Error('evidence digest mismatch');
+  if('revision_lineage' in evidence)lineageOf(d);
+ }
  return d;
 }
 // Never silently discard known history, even if a new snapshot carries a valid checksum.
@@ -46,7 +51,8 @@ export async function acceptRevision(old,next){
  if(!old||old.cutoff===null)return next;
  if(next.cutoff===null||next.cutoff<old.cutoff)throw Error('snapshot rollback');
  // Do not let a valid append-only path bypass an established lineage or unresolved revisions.
- if(!old.evidence?.revision_lineage||!next.evidence?.revision_lineage)return acceptNext(old,next);
+ if(old.evidence?.revision_lineage&&!next.evidence?.revision_lineage)throw Error('missing revision lineage');
+ if(!old.evidence?.revision_lineage)return acceptNext(old,next);
  const a=lineageOf(old),b=lineageOf(next);
  if(a.seed_digest!==b.seed_digest||a.heads.length>b.heads.length||a.heads.some((h,i)=>canonical(h)!==canonical(b.heads[i])))throw Error('history lineage changed');
  const oldHead=a.heads.at(-1).digest,headIndex=new Map(b.heads.map((h,i)=>[h.digest,i])),start=headIndex.get(oldHead);

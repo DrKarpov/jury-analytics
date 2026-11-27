@@ -1,12 +1,12 @@
-# JURY Analytics — P5 (persistent history, provisional Pages deployment)
+# JURY Analytics
 
-**Public beta deployment:** In Settings → Pages, choose GitHub Actions as Source once. `pages.yml` builds only an allowlisted static artifact from a pinned checkout of `data`, validates checksums and browser rendering, and deploys after successful recovery workflows (including scheduled ones). Manual dispatch and site-code pushes also trigger deployment. The public beta is explicitly provisional, not a fully verified dataset. PnL remains unavailable pending sufficient independent audit. GitHub scheduling is best effort; the displayed cutoff is the actual data freshness. A failed build or deployment does not replace the last successful Pages release.
+Независимый дашборд токена JURY в сети TON. [Публичная бета](https://drkarpov.github.io/jury-analytics/) · [Статус и критерии релиза](ROADMAP.md) · [Эксплуатация и восстановление](RUNBOOK.md)
 
-**Earlier persistent preview status:** The public repository and dedicated `data` branch exist. The seed history has been recovered from the completed primary collection; independent audit is ongoing and differences require investigation. The incremental workflow appends validated segments and saves audit batches every 15 minutes, independent of visitors. Full re-indexing is manual only. The separate persistent preview workflow builds from a pinned data checkout, checks its integrity with JavaScript and opens the actual snapshot in Chromium. It does not deploy GitHub Pages. Seed audit results are explicitly scoped to the seed, not the current candidate. Holder and lifecycle evidence is not carried forward to an unrelated snapshot; PnL remains blocked until sufficient verification. No runtime AI/MCP or external server required.
+Python-сборщик использует Toncenter и TonAPI. GitHub Actions сохраняет историю в ветке `data`, проверяет статический артефакт и публикует его на бесплатном GitHub Pages. Данные интерфейса привязаны к cutoff; список держателей имеет отдельное время наблюдения. На момент контрольной точки автономная цепочка по расписанию ещё не подтверждена запусками с `event=schedule`.
 
-The sections below document earlier implementation stages; statements about missing repositories or unavailable live data describe those earlier stages, not the current state.
+Кандидат следующей беты добавляет сверку актуальных ревизий трасс, отдельный манифест обновления и сохраняет действующий gate для PnL. Детали, исходные SHA и незакрытые этапы приведены в статусе проекта.
 
-Независимая ончейн-аналитика JURY. Архитектурный референс — Pepegun Analytics, но отдельная модель данных и интерфейс. Целевая публикация: GitHub Pages (`docs/`). В этой версии нет ИИ, MCP, Wallet Agent, npm-зависимостей, браузерных API-ключей или обязательного постоянно работающего сервера. Источник блокчейна — публичный Toncenter v3 (опциональный API-ключ только для сборщика). Python 3.10+ и Node.js 22 для тестов.
+## История разработки
 
 ## DEX / aggregator coverage requirement
 

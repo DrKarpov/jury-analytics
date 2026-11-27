@@ -3,4 +3,16 @@ export function range(period,cutoff,from,to){if(cutoff===null)return [0,0];if(pe
 export function summarize(events,unresolved,interval){const [a,b]=interval;const selected=events.filter(x=>x.time>=a&&x.time<=b),unknown=unresolved.filter(x=>x.time>=a&&x.time<=b);let buy=0,sell=0,transfer=0,buyQty=0n,sellQty=0n,quote=0n;const wallets=new Map(),days=new Map();for(const x of selected){if(x.kind==='transfer'){transfer++;continue}const qty=BigInt(x.amount_raw);if(x.kind==='buy'){buy++;buyQty+=qty}else{sell++;sellQty+=qty}if(x.quote_asset==='GRAM')quote+=BigInt(x.quote_raw);let w=wallets.get(x.wallet)||{wallet:x.wallet,buy:0n,sell:0n,count:0};w[x.kind]+=qty;w.count++;wallets.set(x.wallet,w);const day=new Date(x.time*1000).toISOString().slice(0,10),d=days.get(day)||{day,buy:0,sell:0};d[x.kind]++;days.set(day,d)}return {selected,unknown,buy,sell,transfer,buyQty,sellQty,quote,wallets:[...wallets.values()].sort((a,b)=>{const x=a.buy+a.sell,y=b.buy+b.sell;return x>y?-1:x<y?1:a.wallet.localeCompare(b.wallet)}),days:[...days.values()].sort((a,b)=>a.day.localeCompare(b.day))}}
 export function format(raw,locale='ru'){let x=BigInt(raw),sign=x<0n?'-':'';if(x<0n)x=-x;const whole=x/NANO,frac=(x%NANO).toString().padStart(9,'0').slice(0,2);return sign+whole.toLocaleString(locale)+(locale==='ru'?',':'.')+frac}
 export function validate(data){if(data.schema!==2||!Array.isArray(data.events)||!Array.isArray(data.unresolved)||!(data.cutoff===null||Number.isSafeInteger(data.cutoff)))throw Error('Invalid snapshot');const ids=new Set();for(const e of data.events){if(ids.has(e.id)||!['buy','sell','transfer'].includes(e.kind)||!Number.isSafeInteger(e.time)||e.time>data.cutoff||!/^\d+$/.test(e.amount_raw)||!/^(-?\d+):[a-f0-9]{64}$/.test(e.wallet)||!(/^[a-f0-9]{64}$/).test(e.trace)||(!['transfer'].includes(e.kind)&&(!/^\d+$/.test(e.quote_raw)||typeof e.quote_asset!=='string')))throw Error('Invalid event');ids.add(e.id)}return data}
-export function csv(rows){const esc=x=>'"'+String(x??'').replaceAll('"','""')+'"';return [['time_utc','type','wallet','destination','amount_raw','quote_asset','quote_raw','trace'],...rows.map(e=>[new Date(e.time*1000).toISOString(),e.kind,e.wallet,e.destination,e.amount_raw,e.quote_asset,e.quote_raw,e.trace])].map(r=>r.map(esc).join(',')).join('\r\n')+'\r\n'}
+export function csv(rows) {
+    const escapeCell = value => {
+        const cell = String(value ?? '');
+        const safe = /^[\t\r\n]|^\s*[=+@-]/u.test(cell) ? "'" + cell : cell;
+        return '"' + safe.replaceAll('"', '""') + '"';
+    };
+    const fields = ['time_utc','type','wallet','destination','amount_raw','quote_asset','quote_raw','trace'];
+    const values = rows.map(event => [
+        new Date(event.time * 1000).toISOString(), event.kind, event.wallet, event.destination,
+        event.amount_raw, event.quote_asset, event.quote_raw, event.trace
+    ]);
+    return [fields, ...values].map(row => row.map(escapeCell).join(',')).join('\r\n') + '\r\n';
+}

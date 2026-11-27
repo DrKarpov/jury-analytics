@@ -1,0 +1,66 @@
+name: Audit current JURY trace revisions
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '41 * * * *'
+permissions:
+  contents: write
+concurrency:
+  group: jury-persistent-data
+  cancel-in-progress: false
+jobs:
+  audit:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: source
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: data
+          path: store
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Continue legacy seed audit for repair inputs
+        timeout-minutes: 2
+        env:
+          TONAPI_API_KEY: ${{ secrets.TONAPI_API_KEY }}
+        run: |
+          python3 -u source/scripts/recovery.py audit --store store --limit 25 --seconds 40
+          bash source/scripts/checkpoint.sh store 'Checkpoint legacy seed audit' ':(glob)audit/batch-*.json' audit-status.json
+      - name: Continue independent current-revision audit
+        timeout-minutes: 4
+        env:
+          TONAPI_API_KEY: ${{ secrets.TONAPI_API_KEY }}
+        run: |
+          python3 -u source/scripts/current_audit.py --store store --limit 100 --seconds 140
+          bash source/scripts/checkpoint.sh store 'Checkpoint current trace audit' ':(glob)current-audit/v1/batch-*.json'
+      - name: Reconcile known historical DeDust alias pattern
+        timeout-minutes: 2
+        env:
+          TONCENTER_API_KEY: ${{ secrets.TONCENTER_API_KEY }}
+          TONAPI_API_KEY: ${{ secrets.TONAPI_API_KEY }}
+        run: |
+          python3 -u source/scripts/auto_repair.py --store store --limit 8 --seconds 30
+          bash source/scripts/checkpoint.sh store 'Checkpoint known alias repairs' ':(glob)repairs/legacy_dedust_jury_unsigned_workchain/*.json' ':(glob)repair-attempts/legacy_dedust_jury_unsigned_workchain/*.json' repair-queue.json repair-status.json
+      - name: Verify additional final native payouts
+        timeout-minutes: 2
+        env:
+          TONCENTER_API_KEY: ${{ secrets.TONCENTER_API_KEY }}
+          TONAPI_API_KEY: ${{ secrets.TONAPI_API_KEY }}
+        run: |
+          python3 -u source/scripts/payout_repair.py --store store --limit 4 --seconds 40
+          bash source/scripts/checkpoint.sh store 'Checkpoint verified native payouts' ':(glob)repairs/dedust_v2_omniston_final_native_payout_v1/*.json' ':(glob)repair-attempts/dedust_v2_omniston_final_native_payout_v1/*.json' payout-status.json
+      - name: Verify additional ambiguous token deliveries
+        timeout-minutes: 2
+        env:
+          TONCENTER_API_KEY: ${{ secrets.TONCENTER_API_KEY }}
+          TONAPI_API_KEY: ${{ secrets.TONAPI_API_KEY }}
+        run: |
+          python3 -u source/scripts/delivery_repair.py --store store --limit 4 --seconds 40
+          bash source/scripts/checkpoint.sh store 'Checkpoint verified exact deliveries' ':(glob)repairs/exact_swap_transfer_delivery_v1/*.json' ':(glob)repair-attempts/exact_swap_transfer_delivery_v1/*.json' delivery-status.json

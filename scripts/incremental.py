@@ -18,6 +18,8 @@ class History:
         self.transfers={r['tx']:r for r in seed['transfers']}
         self.traces=defaultdict(list)
         self.events=defaultdict(list)
+        self.actions_digests={}
+        self.heads={self.head}
         self.unresolved={r['trace']:r for r in seed['unresolved']}
         for r in self.transfers.values():self.traces[r['trace']].append(r)
         for e in seed['events']:self.events[e['trace']].append(e)
@@ -39,7 +41,9 @@ class History:
         if len(patches)!=len(b['patches']) or not affected<=patches.keys():raise ValueError('incomplete or duplicate trace patches')
         available=defaultdict(list)
         for r in b['transfers']:available[r['trace']].append(r)
+        action_digests={}
         for trace,patch in patches.items():
+            action_digests[trace]=digest(sorted(patch['actions'],key=lambda action:action['action_id']))
             rows=self.traces.get(trace,[])+available[trace]
             if not rows:raise ValueError('orphan trace patch')
             es,u=patch['events'],patch['unresolved']
@@ -60,7 +64,9 @@ class History:
             self.events[trace]=patch['events']
             if patch['unresolved'] is None:self.unresolved.pop(trace,None)
             else:self.unresolved[trace]=patch['unresolved']
+        self.actions_digests.update(action_digests)
         self.cutoff=end;self.head=b['digest']
+        self.heads.add(self.head)
 
     def candidate(self):
         c={'schema':2,'token':MASTER,'cutoff':self.cutoff,'source':'Toncenter v3','audit':'single_provider_unverified',
@@ -120,27 +126,61 @@ def build_update(h,fetch,target,max_traces=MAX_TRACES):
     b['digest']=digest(b)
     return b
 
-def advance(store,fetch=request,target=None,seed=None):
-    h=load_history(store,seed);target=int(time.time())-180 if target is None else target
-    deadline=time.monotonic()+240
-    def bounded(e,p):
-        if time.monotonic()>=deadline:raise TimeoutError('incremental request budget exhausted')
-        return fetch(e,p)
-    b=build_update(h,bounded,target)
-    if b:
-        h.apply(b);h.candidate()
-        folder=store/'updates';folder.mkdir(exist_ok=True)
-        path=folder/f"batch-{b['from_cutoff']:012d}-{b['to_cutoff']:012d}.json"
-        if path.exists():raise ValueError('immutable update already exists')
-        publish(b,path)
-    report={'status':'primary_unverified','seed_digest':h.seed,'head_digest':h.head,'cutoff':h.cutoff,
-            'transfer_count':len(h.transfers),'trace_count':len(h.traces),'new_transfers':len(b['transfers']) if b else 0,
-            'late_transfers':b['late_transfers'] if b else 0,'remaining_seconds':max(0,target-h.cutoff),
-            'scope':'primary transfer discovery; seed audit does not verify updated history'}
-    publish(report,store/'update-status.json')
-    print(json.dumps(report),flush=True)
+def advance(store, fetch=request, target=None, seed=None, max_windows=1):
+    if not 1 <= max_windows <= 3:
+        raise ValueError('invalid catch-up window limit')
+    h = load_history(store, seed)
+    target = int(time.time()) - 180 if target is None else target
+    deadline = time.monotonic() + 240
+
+    def bounded(endpoint, params):
+        if time.monotonic() >= deadline:
+            raise TimeoutError('incremental request budget exhausted')
+        if fetch is request:
+            return request(endpoint, params, deadline=deadline)
+        return fetch(endpoint, params)
+
+    windows = new_transfers = late_transfers = 0
+    stop_reason = None
+    for _ in range(max_windows):
+        try:
+            batch = build_update(h, bounded, target)
+        except OSError as error:
+            if not windows:
+                raise
+            stop_reason = type(error).__name__
+            break
+        if batch is None:
+            break
+        h.apply(batch)
+        h.candidate()
+        folder = store / 'updates'
+        folder.mkdir(exist_ok=True)
+        path = folder / f"batch-{batch['from_cutoff']:012d}-{batch['to_cutoff']:012d}.json"
+        if path.exists():
+            raise ValueError('immutable update already exists')
+        publish(batch, path)
+        windows += 1
+        new_transfers += len(batch['transfers'])
+        late_transfers += batch['late_transfers']
+
+    report = {'status': 'primary_unverified', 'seed_digest': h.seed, 'head_digest': h.head,
+              'cutoff': h.cutoff, 'transfer_count': len(h.transfers), 'trace_count': len(h.traces),
+              'windows': windows, 'new_transfers': new_transfers, 'late_transfers': late_transfers,
+              'remaining_seconds': max(0, target - h.cutoff), 'stop_reason': stop_reason,
+              'scope': 'primary transfer discovery; seed audit does not verify updated history'}
+    publish(report, store / 'update-status.json')
+    print(json.dumps(report), flush=True)
     return report
 
+
 def main():
-    p=argparse.ArgumentParser();p.add_argument('--store',type=Path,required=True);a=p.parse_args();advance(a.store)
-if __name__=='__main__':main()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--store', type=Path, required=True)
+    parser.add_argument('--max-windows', type=int, default=1)
+    args = parser.parse_args()
+    advance(args.store, max_windows=args.max_windows)
+
+
+if __name__ == '__main__':
+    main()

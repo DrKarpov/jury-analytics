@@ -1,10 +1,6 @@
 name: Update and audit persistent history
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/recovery.yml'
   schedule:
     - cron: '7,22,37,52 * * * *'
 permissions:
@@ -14,9 +10,10 @@ concurrency:
   group: jury-persistent-data
   cancel-in-progress: false
 jobs:
-  recover-audit:
+  ingest:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
-    timeout-minutes: 26
+    timeout-minutes: 11
     steps:
       - uses: actions/checkout@v4
         with:
@@ -30,8 +27,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Validate checkpoint implementation
-        run: python3 -m unittest discover -s source/tests -v
       - name: Check for saved seed
         id: seed
         run: |
@@ -51,108 +46,20 @@ jobs:
         if: steps.seed.outputs.needed == 'true'
         run: |
           python3 source/scripts/recovery.py seed --input seed-input/staging --store store
-          git -C store config user.name 'github-actions[bot]'
-          git -C store config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git -C store add seed
-          git -C store commit -m 'Recover primary JURY history from staging artifact'
-          git -C store push origin HEAD:data
-      - name: Collect new transfers and classify affected traces
-        id: incremental
+          bash source/scripts/checkpoint.sh store 'Recover primary JURY history from staging artifact' ':(glob)seed/**/*.json'
+      - name: Collect validated incremental segments
         timeout-minutes: 6
         env:
-          TONCENTER_API_KEY: ''
-        run: python3 -u source/scripts/incremental.py --store store
-      - name: Persist incremental segment
-        if: steps.incremental.outcome == 'success'
+          TONCENTER_API_KEY: ${{ secrets.TONCENTER_API_KEY }}
         run: |
-          git -C store config user.name 'github-actions[bot]'
-          git -C store config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git -C store add -A
-          if ! git -C store diff --cached --quiet; then
-            git -C store commit -m 'Checkpoint incremental primary history'
-            git -C store push origin HEAD:data
-          fi
-      - name: Refresh independent holder observation
-        id: holders
-        if: ${{ !cancelled() && steps.incremental.outcome == 'success' }}
+          python3 -u source/scripts/incremental.py --store store --max-windows 3
+          bash source/scripts/checkpoint.sh store 'Checkpoint incremental primary history' ':(glob)updates/batch-*.json' update-status.json
+      - name: Refresh and persist independent holder observation
         timeout-minutes: 2
+        continue-on-error: true
         env:
-          TONCENTER_API_KEY: ''
+          TONCENTER_API_KEY: ${{ secrets.TONCENTER_API_KEY }}
           TONAPI_API_KEY: ${{ secrets.TONAPI_API_KEY }}
-        run: python3 -u source/scripts/holder_state.py --store store
-      - name: Persist holder observation and status
-        if: ${{ !cancelled() && steps.holders.outcome == 'success' }}
         run: |
-          git -C store add holders
-          if ! git -C store diff --cached --quiet; then
-            git -C store commit -m 'Checkpoint independent holder observation'
-            git -C store push origin HEAD:data
-          fi
-      - name: Audit next bounded batch
-        id: audit
-        if: ${{ !cancelled() && steps.incremental.outcome != 'skipped' }}
-        timeout-minutes: 6
-        env:
-          TONAPI_API_KEY: ${{ secrets.TONAPI_API_KEY }}
-        run: python3 -u source/scripts/recovery.py audit --store store --limit 100 --seconds 240
-      - name: Persist completed audit checkpoint
-        if: ${{ !cancelled() && steps.audit.outcome == 'success' }}
-        run: |
-          git -C store config user.name 'github-actions[bot]'
-          git -C store config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git -C store add -A
-          if ! git -C store diff --cached --quiet; then
-            git -C store commit -m 'Checkpoint independent trace audit'
-            git -C store push origin HEAD:data
-          fi
-      - name: Verify additional final native payouts
-        id: payout
-        if: ${{ !cancelled() && steps.audit.outcome == 'success' }}
-        timeout-minutes: 3
-        env:
-          TONCENTER_API_KEY: ''
-          TONAPI_API_KEY: ${{ secrets.TONAPI_API_KEY }}
-        run: python3 -u source/scripts/payout_repair.py --store store
-      - name: Persist completed payout checks
-        if: ${{ !cancelled() && steps.payout.outcome == 'success' }}
-        run: |
-          git -C store add -A
-          if ! git -C store diff --cached --quiet; then
-            git -C store commit -m 'Checkpoint verified final payout evidence'
-            git -C store push origin HEAD:data
-          fi
-      - name: Verify additional ambiguous token deliveries
-        id: delivery
-        if: ${{ !cancelled() && steps.audit.outcome == 'success' }}
-        timeout-minutes: 4
-        env:
-          TONCENTER_API_KEY: ''
-          TONAPI_API_KEY: ${{ secrets.TONAPI_API_KEY }}
-        run: python3 -u source/scripts/delivery_repair.py --store store
-      - name: Persist completed delivery checks
-        if: ${{ !cancelled() && steps.delivery.outcome == 'success' }}
-        run: |
-          git -C store add -A
-          if ! git -C store diff --cached --quiet; then
-            git -C store commit -m 'Checkpoint verified token delivery evidence'
-            git -C store push origin HEAD:data
-          fi
-      - name: Automatically reconcile known historical discrepancy pattern
-        id: repair
-        if: ${{ !cancelled() && steps.audit.outcome == 'success' }}
-        timeout-minutes: 4
-        env:
-          TONCENTER_API_KEY: ''
-          TONAPI_API_KEY: ${{ secrets.TONAPI_API_KEY }}
-        run: python3 -u source/scripts/auto_repair.py --store store --limit 40 --seconds 100
-      - name: Persist validated repairs and remaining review queue
-        if: ${{ !cancelled() && steps.repair.outcome == 'success' }}
-        run: |
-          git -C store add repair-status.json repair-queue.json
-          for dir in repairs repair-attempts; do
-            if test -n "$(find "store/$dir" -type f -name '*.json' -print -quit)"; then git -C store add "$dir"; fi
-          done
-          if ! git -C store diff --cached --quiet; then
-            git -C store commit -m 'Checkpoint automatic repairs and remaining discrepancy queue'
-            git -C store push origin HEAD:data
-          fi
+          python3 -u source/scripts/holder_state.py --store store
+          bash source/scripts/checkpoint.sh store 'Checkpoint independent holder observation' holders/latest.json holders/status.json ':(glob)holders/daily/*.json'

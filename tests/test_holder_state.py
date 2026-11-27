@@ -36,3 +36,13 @@ class HolderStateTests(unittest.TestCase):
         with self.assertRaises(ValueError):evidence(self.p,'new',now=102)
     def test_missing(self):
         h,s=evidence(self.p,'new');self.assertEqual(h['status'],'unavailable')
+
+    def test_daily_series_preserves_first_valid_observation(self):
+        refresh(self.p,observation)
+        archive=self.p/'holders'/'daily'/'1970-01-01.json'
+        first=archive.read_bytes()
+        refresh(self.p,lambda:{**observation(),'started_at':102,'observed_at':103})
+        self.assertEqual(archive.read_bytes(),first)
+        self.assertEqual(evidence(self.p,'new',now=104)[0]['observed_at'],103)
+        refresh(self.p,lambda:{**observation(),'started_at':86401,'observed_at':86402})
+        self.assertEqual(len(list(archive.parent.glob('*.json'))),2)
