@@ -1,0 +1,24 @@
+{
+  "source": "https://github.com/ton-blockchain/abis/blob/master/data/moon/info.toml",
+  "legacy_source": "https://github.com/ton-studio/ton-etl/blob/main/parser/parsers/message/moon_swap_ton.py",
+  "hashes": {
+    "ce84c382c8b6ac0d05212bbaa34d05e54e1e30e2cc9289f2d9c9d64726a112a8": "MoonBooster",
+    "f027fcc000d2961bd2bda733226b67ea08162e8807623f6056c99616ee94de87": "MoonPool",
+    "dfa9fd42df3347715c99841052ac7395927fa3bf00dec27912ae922387beac91": "MoonClmmRange",
+    "d04737d6f678103a9e448c22109919d0f9cbe05ef1b1a83c5e7b886683a54704": "MoonOrderFactory",
+    "ee07140b3ccfe261ed28580f60a16bda4c4b9c6d7da7ae05f5b7c7e2b1dfe226": "MoonOrderOld",
+    "88c38d29586b5d748badbc7b4dbfe239c25cb85ca9c4586a44e05507a6edf6a6": "MoonOrderNew"
+  },
+  "addresses": {
+    "EQAyAz5tgCe2HVeJnYG9WN_sJ9ozkfAJEomnGTRpqMuOOeOv": "MoonBooster",
+    "EQCMpWCnDHVhMnUspAaKxagkXuW0NGhMq6Y-HCW_BO20e-Ju": "MoonPool",
+    "EQCzsA2cULtgsoTSGi47JsR-R7KGjkSVQdQY5cJqR2GJJ00w": "MoonClmmRange",
+    "EQA0VcBwsHdubKdLypMORAFbfSQZiY4hvhTqP7OWCIDIDb5-": "MoonClmmRange",
+    "EQBb9cFMLiLJFgoTDazfcZQsL9OUrTPIWQ29-FFpTOKbBQEX": "MoonClmmRange",
+    "EQAAkNGC_1PjTYB84UkTvUkCbY-nKuTrdyfB-MkOwVuHJwfl": "MoonClmmRange",
+    "EQDigIndTzm4FQ8lygizRH869SxW2dVyn4KcyDV7PwfrquZT": "MoonOrderFactory",
+    "EQAv_Q12BIyI9IToOKMOG0QhqMaVG3DI-ytmkNsmEecaQG4B": "MoonOrderOld",
+    "EQDYBeAlOAUgG6DwWG9EdPSJaPjr5B1E1tNSKOhRxv7O6KiQ": "MoonOrderNew"
+  },
+  "legacy_hash_base64": "KAgWUlMoah5P5j76ubo1SBE3qsCxoPntzLj2RC3eRsQ="
+}
