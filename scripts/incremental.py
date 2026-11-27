@@ -19,6 +19,7 @@ class History:
         self.traces=defaultdict(list)
         self.events=defaultdict(list)
         self.actions_digests={}
+        self.heads={self.head}
         self.unresolved={r['trace']:r for r in seed['unresolved']}
         for r in self.transfers.values():self.traces[r['trace']].append(r)
         for e in seed['events']:self.events[e['trace']].append(e)
@@ -65,6 +66,7 @@ class History:
             else:self.unresolved[trace]=patch['unresolved']
         self.actions_digests.update(action_digests)
         self.cutoff=end;self.head=b['digest']
+        self.heads.add(self.head)
 
     def candidate(self):
         c={'schema':2,'token':MASTER,'cutoff':self.cutoff,'source':'Toncenter v3','audit':'single_provider_unverified',

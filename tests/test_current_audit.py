@@ -6,7 +6,7 @@ from test_incremental import seed
 from incremental import History
 from recovery import read
 from indexer import publish
-from current_audit import audit, coverage
+from current_audit import audit, coverage, batch_digest
 
 
 class CurrentAuditTests(unittest.TestCase):
@@ -24,6 +24,7 @@ class CurrentAuditTests(unittest.TestCase):
     def test_revision_change_invalidates_observation(self):
         self.assertEqual(audit(self.store, self.history, self.fetch, now=100)['mismatch'], 1)
         self.assertEqual(coverage(self.store, self.history)['pending'], 0)
+        self.assertEqual(coverage(self.store, self.history)['mismatch_reasons'], {'alternate_missing': 1})
         self.history.traces[self.trace][0]['amount_raw'] = '3'
         self.assertEqual(coverage(self.store, self.history)['pending'], 1)
         self.assertEqual(coverage(self.store, self.history)['mismatch'], 0)
@@ -45,4 +46,14 @@ class CurrentAuditTests(unittest.TestCase):
         batch['rows'][0]['status'] = 'match'
         publish(batch, path)
         with self.assertRaisesRegex(ValueError, 'digest'):
+            coverage(self.store, self.history)
+
+    def test_replay_requires_primary_evidence_for_the_exact_revision(self):
+        audit(self.store, self.history, self.fetch, now=100)
+        path = next((self.store / 'current-audit' / 'v1').glob('batch-*.json'))
+        batch = read(path)
+        batch['rows'][0].update(status='match', primary_swaps=[], alternate_swaps=[])
+        batch['digest'] = batch_digest(batch)
+        publish(batch, path)
+        with self.assertRaisesRegex(ValueError, 'primary evidence'):
             coverage(self.store, self.history)

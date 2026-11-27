@@ -45,6 +45,8 @@ def fetch_json(url, headers, attempts, timeout, deadline):
                 raise
             delay = retry_delay(error, attempt)
             if attempt == attempts - 1 or time.monotonic() + delay >= deadline:
+                if isinstance(error, IncompleteRead):
+                    raise urllib.error.URLError('incomplete provider response') from error
                 raise
             time.sleep(delay)
         else:

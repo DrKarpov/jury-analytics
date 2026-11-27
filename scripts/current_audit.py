@@ -9,6 +9,7 @@ from urllib.error import HTTPError
 
 from audit import tonapi_swaps
 from incremental import ordered
+from discrepancy import category
 from indexer import digest, publish
 from provider import tonapi_request
 from recovery import primary, read
@@ -34,7 +35,7 @@ def batch_digest(batch):
     return digest({key: value for key, value in batch.items() if key != 'digest'})
 
 
-def replay(store):
+def replay(store, history):
     latest = {}
     head = None
     seq = 0
@@ -43,7 +44,8 @@ def replay(store):
         if batch.get('digest') != batch_digest(batch):
             raise ValueError('current audit batch digest mismatch')
         if (batch['sequence'] != seq or path.name != f'batch-{seq:08d}.json'
-                or batch['previous_digest'] != head or not 1 <= len(batch['rows']) <= 300):
+                or batch['previous_digest'] != head or batch['history_head'] not in history.heads
+                or not 1 <= len(batch['rows']) <= 300):
             raise ValueError('current audit checkpoint discontinuity')
         seen = set()
         for row in batch['rows']:
@@ -65,14 +67,19 @@ def replay(store):
     return latest, seq, head
 
 
-def summarize(current, latest):
+def summarize(current, latest, grouped):
     counts = Counter()
+    mismatch_reasons = Counter()
     matched_with_swaps = 0
     last_observed_at = None
     for trace, version in current.items():
         row = latest.get((trace, version))
         counts[row['status'] if row else 'pending'] += 1
         if row:
+            if row['status'] != 'unavailable' and row['primary_swaps'] != encode(grouped[trace]):
+                raise ValueError('current audit primary evidence differs from replayed trace')
+            if row['status'] == 'mismatch':
+                mismatch_reasons[category(row)] += 1
             if row['status'] == 'match' and row['primary_swaps']:
                 matched_with_swaps += 1
             last_observed_at = max(last_observed_at or 0, row['observed_at'])
@@ -82,15 +89,23 @@ def summarize(current, latest):
         'matched': counts['match'],
         'matched_with_swaps': matched_with_swaps,
         'mismatch': counts['mismatch'],
+        'mismatch_reasons': dict(sorted(mismatch_reasons.items())),
         'unavailable': counts['unavailable'],
         'pending': counts['pending'],
         'last_observed_at': last_observed_at,
     }
 
 
+def primary_swaps(history):
+    return primary({
+        'transfers': history.transfers.values(),
+        'events': [event for events in history.events.values() for event in events],
+    })
+
+
 def coverage(store, history):
-    latest, _, _ = replay(store)
-    return summarize(revisions(history), latest)
+    latest, _, _ = replay(store, history)
+    return summarize(revisions(history), latest, primary_swaps(history))
 
 
 def select(history, current, latest, limit, now, retry_slot):
@@ -123,9 +138,10 @@ def audit(store, history, fetch=tonapi_request, limit=100, seconds=180, now=None
     if not 1 <= limit <= 300 or seconds <= 0:
         raise ValueError('invalid current audit budget')
     now = int(time.time()) if now is None else now
-    latest, seq, head = replay(store)
+    latest, seq, head = replay(store, history)
     current = revisions(history)
-    grouped = primary(history.candidate())
+    grouped = primary_swaps(history)
+    summarize(current, latest, grouped)
     rows = []
     stop_reason = None
     deadline = time.monotonic() + seconds
@@ -162,8 +178,8 @@ def audit(store, history, fetch=tonapi_request, limit=100, seconds=180, now=None
         if path.exists():
             raise ValueError('current audit checkpoint already exists')
         publish(batch, path)
-        latest, _, _ = replay(store)
-    return {**summarize(current, latest), 'requests_recorded': len(rows), 'stop_reason': stop_reason}
+        latest, _, _ = replay(store, history)
+    return {**summarize(current, latest, grouped), 'requests_recorded': len(rows), 'stop_reason': stop_reason}
 
 
 def main():
