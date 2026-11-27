@@ -2,7 +2,7 @@ name: Publish provisional JURY dashboard
 on:
   workflow_dispatch:
   workflow_run:
-    workflows: ['Update and audit persistent history', 'Audit current JURY trace revisions']
+    workflows: ['Update and audit persistent history', 'Audit current JURY trace revisions', 'Reconstruct JURY genesis and delivery receipts']
     types: [completed]
     branches: [main]
   push:
@@ -10,6 +10,10 @@ on:
     paths:
       - '.github/workflows/pages.yml'
       - 'scripts/**'
+      - '!scripts/genesis_checkpoint.py'
+      - '!scripts/master_history.py'
+      - '!scripts/wallet_history.py'
+      - '!scripts/wallet_reconcile.py'
       - 'docs/**'
 permissions:
   contents: read

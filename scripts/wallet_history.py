@@ -156,7 +156,7 @@ def run(store,center,alternate,pages=24,size=50,seconds=200):
         def priority(x):
             return (failures.get(x,{}).get('at',0),
                     0 if (weights[x]>0 if done%2==0 else x in roots) else 1,
-                    states.get(x,{}).get('pages',0),-weights[x],x)
+                    -weights[x],states.get(x,{}).get('pages',0),x)
         w=min(options,key=priority)
         try:
             dest=folder/'accounts'/key(w);dest.mkdir(parents=True,exist_ok=True)

@@ -18,7 +18,7 @@ jobs:
   genesis:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
-    timeout-minutes: 17
+    timeout-minutes: 42
     steps:
       - uses: actions/checkout@v4
         with:
@@ -31,34 +31,62 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Validate genesis checkpoint code
-        run: python3 -m unittest discover -s source/tests -p test_genesis_checkpoint.py -v
+      - name: Validate genesis and wallet reconciliation code
+        run: |
+          python3 -m unittest discover -s source/tests -p test_genesis_checkpoint.py -v
+          python3 -m unittest discover -s source/tests -p 'test_wallet*.py' -v
       - name: Recover pinned master chain
         timeout-minutes: 5
         env:
-          TONCENTER_API_KEY: ''
+          TONCENTER_API_KEY: ${{ secrets.TONCENTER_API_KEY }}
           TONAPI_API_KEY: ${{ secrets.TONAPI_API_KEY }}
         run: |
           python3 -u source/scripts/genesis_checkpoint.py master --store store --seconds 240
           bash source/scripts/checkpoint.sh store 'Checkpoint pinned JURY master chain' genesis/v1/master.json
-      - name: Verify and persist bounded recipient receipts
-        timeout-minutes: 5
+      - name: Refresh primary discovery before historical backfill
+        timeout-minutes: 6
+        continue-on-error: true
         env:
-          TONCENTER_API_KEY: ''
+          TONCENTER_API_KEY: ${{ secrets.TONCENTER_API_KEY }}
+        run: |
+          python3 -u source/scripts/incremental.py --store store --max-windows 3
+          bash source/scripts/checkpoint.sh store 'Checkpoint primary history before genesis backfill' ':(glob)updates/batch-*.json' update-status.json
+      - name: Continue genesis and linked wallet history in checkpointed rounds
+        timeout-minutes: 26
+        env:
+          TONCENTER_API_KEY: ${{ secrets.TONCENTER_API_KEY }}
+          TONAPI_API_KEY: ${{ secrets.TONAPI_API_KEY }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          rounds=3
+          if [[ "$EVENT_NAME" == schedule ]]; then rounds=1; fi
+          for ((i=1; i<=rounds; i++)); do
+            echo "Historical backfill round $i/$rounds"
+            python3 -u source/scripts/genesis_checkpoint.py receipts --store store --seconds 200 --limit 100
+            bash source/scripts/checkpoint.sh store 'Checkpoint genesis delivery receipts' ':(glob)genesis/v1/receipts/*.json' genesis/v1/pending.json genesis/v1/status.json
+            python3 -u source/scripts/wallet_history.py --store store --pages 60 --size 100 --seconds 200
+            bash source/scripts/checkpoint.sh store 'Checkpoint linked JURY wallet history' ':(glob)genesis/v1/wallet-history/accounts/**/*.json' genesis/v1/wallet-history/pending.json genesis/v1/wallet-history/status.json
+            python3 -u source/scripts/wallet_reconcile.py --store store
+            bash source/scripts/checkpoint.sh store 'Checkpoint wallet delivery reconciliation' genesis/v1/wallet-history/reconciliation.json
+            if python3 -c 'import json; from pathlib import Path; g=Path("store/genesis/v1"); a=json.loads((g/"status.json").read_text()); b=json.loads((g/"wallet-history/status.json").read_text()); raise SystemExit(0 if a["pending_receipts"]==0 and b["candidate_accounts"]==b["linked_chains_complete"] and b["unmatched_internal_messages"]==0 and b["account_gaps"]==0 else 1)'; then
+              echo 'Pinned master receipts and graph traversal are exhausted; further ledger verification is required.'
+              break
+            fi
+          done
+      - name: Refresh primary discovery after historical backfill
+        timeout-minutes: 6
+        continue-on-error: true
+        env:
+          TONCENTER_API_KEY: ${{ secrets.TONCENTER_API_KEY }}
+        run: |
+          python3 -u source/scripts/incremental.py --store store --max-windows 3
+          bash source/scripts/checkpoint.sh store 'Checkpoint primary history after genesis backfill' ':(glob)updates/batch-*.json' update-status.json
+      - name: Continue independent current trace audit
+        timeout-minutes: 4
+        continue-on-error: true
+        env:
           TONAPI_API_KEY: ${{ secrets.TONAPI_API_KEY }}
         run: |
-          python3 -u source/scripts/genesis_checkpoint.py receipts --store store --seconds 200 --limit 60
-          bash source/scripts/checkpoint.sh store 'Checkpoint genesis delivery receipts' ':(glob)genesis/v1/receipts/*.json' genesis/v1/pending.json genesis/v1/status.json
-      - name: Traverse independently compared wallet account chains
-        timeout-minutes: 5
-        env:
-          TONCENTER_API_KEY: ''
-          TONAPI_API_KEY: ${{ secrets.TONAPI_API_KEY }}
-        run: |
-          python3 -u source/scripts/wallet_history.py --store store --pages 24 --size 50 --seconds 200
-          bash source/scripts/checkpoint.sh store 'Checkpoint linked JURY wallet history' ':(glob)genesis/v1/wallet-history/accounts/**/*.json' genesis/v1/wallet-history/pending.json genesis/v1/wallet-history/status.json
-      - name: Compare linked deliveries with existing transfer index
-        timeout-minutes: 2
-        run: |
-          python3 -u source/scripts/wallet_reconcile.py --store store
-          bash source/scripts/checkpoint.sh store 'Checkpoint wallet delivery reconciliation' genesis/v1/wallet-history/reconciliation.json
+          python3 -u source/scripts/current_audit.py --store store --limit 100 --seconds 140
+          bash source/scripts/checkpoint.sh store 'Checkpoint current trace audit' ':(glob)current-audit/v1/batch-*.json'
