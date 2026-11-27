@@ -1,0 +1,49 @@
+name: Reconstruct JURY genesis and delivery receipts
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/genesis.yml'
+  schedule:
+    - cron: '12 * * * *'
+permissions:
+  contents: write
+concurrency:
+  group: jury-persistent-data
+  cancel-in-progress: false
+jobs:
+  genesis:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 11
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: source
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: data
+          path: store
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate genesis checkpoint code
+        run: python3 -m unittest discover -s source/tests -p test_genesis_checkpoint.py -v
+      - name: Recover pinned master chain
+        timeout-minutes: 5
+        env:
+          TONCENTER_API_KEY: ''
+          TONAPI_API_KEY: ${{ secrets.TONAPI_API_KEY }}
+        run: |
+          python3 -u source/scripts/genesis_checkpoint.py master --store store --seconds 240
+          bash source/scripts/checkpoint.sh store 'Checkpoint pinned JURY master chain' genesis/v1/master.json
+      - name: Verify and persist bounded recipient receipts
+        timeout-minutes: 5
+        env:
+          TONCENTER_API_KEY: ''
+          TONAPI_API_KEY: ${{ secrets.TONAPI_API_KEY }}
+        run: |
+          python3 -u source/scripts/genesis_checkpoint.py receipts --store store --seconds 200 --limit 60
+          bash source/scripts/checkpoint.sh store 'Checkpoint genesis delivery receipts' ':(glob)genesis/v1/receipts/*.json' genesis/v1/pending.json genesis/v1/status.json

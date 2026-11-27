@@ -51,3 +51,7 @@ python3 scripts/master_history.py --store /path/to/pinned-data --out /path/to/ma
 Проверенные зачисления сохраняются отдельными файлами с digest и переиспользуются при следующем запуске. Перед подтверждением полной истории требуется пройти транзакционные цепочки jetton-кошельков со старейших известных зачислений, замыкать множество кошельков по фактическим доставкам, учитывать контракты с нулевым остатком и сравнивать конечные балансы и эмиссию на общей границе. Сопоставление истории мастера само по себе не подтверждает охват последующих переводов и сделок.
 
 [Транзакция развёртывания в Tonviewer](https://tonviewer.com/transaction/b6d564b65ad5b8aeb80821f30752da3d03393e2991a5c9ae269419a04a728481)
+
+### Persistent genesis recovery
+
+The separate `genesis.yml` workflow reconstructs the master at the fixed historical cutoff 1795796649, independently of the changing beta cutoff. `genesis/v1/master.json` is immutable. Each successful receipt stores both provider responses and is revalidated by replay; failures remain pending and are revisited after unattempted messages. The first run reconstructs evidence not previously committed by Codex. No seed or trade metrics are changed. The next stage is account-chain traversal starting from these verified receipts. Schedule execution remains unproven.
