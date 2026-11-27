@@ -16,3 +16,21 @@ export function csv(rows) {
     ]);
     return [fields, ...values].map(row => row.map(escapeCell).join(',')).join('\r\n') + '\r\n';
 }
+
+// UTC-aligned buckets with explicit empty intervals. All-history mode starts at
+// the earliest observed trade because its logical range starts at the Unix epoch.
+export function tradeBuckets(rows, [start, end]) {
+    const trades = rows.filter(row => (row.kind === 'buy' || row.kind === 'sell')
+        && row.time >= start && row.time <= end);
+    if (!trades.length) return [];
+    if (start === 0) start = trades.reduce((earliest, row) => Math.min(earliest, row.time), end);
+    const widths = [900, 1800, 3600, 7200, 21600, 43200, 86400, 604800, 2592000];
+    const step = widths.find(width => end-start+1 <= width*24) ?? Math.ceil((end-start+1)/24);
+    const anchor = Math.floor(start/step)*step;
+    const count = Math.floor((end-anchor)/step)+1;
+    const buckets = Array.from({length:count}, (_, i) => ({
+        from:Math.max(start, anchor+i*step), to:Math.min(end, anchor+(i+1)*step-1), buy:0, sell:0
+    }));
+    for (const trade of trades) buckets[Math.floor((trade.time-anchor)/step)][trade.kind]++;
+    return buckets;
+}

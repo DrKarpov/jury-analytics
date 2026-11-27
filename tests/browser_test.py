@@ -30,6 +30,19 @@ with sync_playwright() as p:
         page.reload();expect(page.locator('#status')).to_have_text('Не сверено')
         assert page.locator('#metrics .metric').first.inner_text()=='1'
         assert page.locator('#metrics .metric').nth(1).inner_text()=='1'
+        expect(page.locator('#data-cutoff')).to_contain_text('UTC')
+        query=page.locator('#operation-query')
+        query.fill('b'*64)
+        assert page.locator('#transactions tbody tr').count()==1
+        expect(page.locator('#transactions tbody')).to_contain_text('Продажи')
+        query.fill('x'*8)
+        expect(page.locator('#export')).to_be_disabled()
+        query.clear()
+        expect(page.locator('#export')).to_be_enabled()
+        bucket=page.locator('.chart-bucket[tabindex="0"]')
+        bucket.focus()
+        bucket.press('ArrowLeft')
+        expect(page.locator('#chart-reading')).to_contain_text('Покупки')
         page.locator('#wallet-input').fill(address);page.locator('#search-button').click();assert page.locator('#wallet-detail .mini-metric').count()==9
         assert page.locator('#pnl-note').inner_text().startswith('Недоступно:')
         assert page.locator('#holder-metrics .mini-metric').first.locator('strong').inner_text()=='—'

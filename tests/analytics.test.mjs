@@ -4,3 +4,10 @@ const e={time:100,kind:'buy',wallet:'w',amount_raw:'1000000001',quote_asset:'GRA
 const hostile = csv([{...e, quote_asset:' \t=1+1', wallet:'-1:'+'a'.repeat(64)}]);
 assert.ok(hostile.includes("\"' \t=1+1\""));
 assert.ok(hostile.includes("\"'-1:"));
+
+const {tradeBuckets}=await import('../docs/analytics.mjs');
+const series=tradeBuckets([
+    {kind:'buy',time:100}, {kind:'sell',time:900}, {kind:'transfer',time:901}, {kind:'buy',time:1900}
+],[100,1799]);
+assert.deepEqual(series,[{from:100,to:899,buy:1,sell:0},{from:900,to:1799,buy:0,sell:1}]);
+assert.deepEqual(tradeBuckets([{kind:'transfer',time:1}],[1,10]),[]);
