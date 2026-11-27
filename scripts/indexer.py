@@ -66,7 +66,15 @@ def fetch_actions(fetch, ids):
         seen.add(k); out[t].append(a)
     return out
 
-def classify(trace, actions, rows, cutoff):
+def endpoint_asset(value, expected, dex, allow_alias=True):
+    # Observed Toncenter legacy DeDust transfer field encodes JURY workchain -1 as unsigned 255.
+    # Do not normalize arbitrary addresses or other assets; require canonical endpoint identity.
+    actual=asset(value)
+    if allow_alias and dex=='dedust' and expected==TOKEN and actual=='255:'+TOKEN.split(':',1)[1]:
+        return TOKEN
+    return actual
+
+def classify(trace, actions, rows, cutoff, allow_alias=True):
     """Count settled provider-classified endpoint swaps, not intermediate peer legs.
     No inference from direction of transfer alone. Unresolved traces remain visible.
     """
@@ -85,7 +93,7 @@ def classify(trace, actions, rows, cutoff):
                     continue
                 i,o=d['dex_incoming_transfer'],d['dex_outgoing_transfer']
                 # Require endpoint asset agreement and positive amounts.
-                if 'asset' not in i or 'asset' not in o or asset(i['asset'])!=ai or asset(o['asset'])!=ao: raise ValueError('asset mismatch')
+                if 'asset' not in i or 'asset' not in o or endpoint_asset(i['asset'],ai,d.get('dex'),allow_alias)!=ai or endpoint_asset(o['asset'],ao,d.get('dex'),allow_alias)!=ao: raise ValueError('asset mismatch')
                 ni,no=integer(i['amount']),integer(o['amount']); sender=address(d['sender'])
                 if not ni or not no: raise ValueError('zero swap')
                 side='buy' if ao==TOKEN else 'sell'; qty=no if side=='buy' else ni
