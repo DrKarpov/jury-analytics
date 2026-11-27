@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/genesis.yml'
       - 'scripts/wallet_history.py'
+      - 'scripts/wallet_reconcile.py'
   schedule:
     - cron: '12 * * * *'
 permissions:
@@ -56,3 +57,8 @@ jobs:
         run: |
           python3 -u source/scripts/wallet_history.py --store store --pages 24 --size 50 --seconds 200
           bash source/scripts/checkpoint.sh store 'Checkpoint linked JURY wallet history' ':(glob)genesis/v1/wallet-history/accounts/**/*.json' genesis/v1/wallet-history/pending.json genesis/v1/wallet-history/status.json
+      - name: Compare linked deliveries with existing transfer index
+        timeout-minutes: 2
+        run: |
+          python3 -u source/scripts/wallet_reconcile.py --store store
+          bash source/scripts/checkpoint.sh store 'Checkpoint wallet delivery reconciliation' genesis/v1/wallet-history/reconciliation.json

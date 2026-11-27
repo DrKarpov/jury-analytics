@@ -145,10 +145,19 @@ def run(store,center,alternate,pages=24,size=50,seconds=200):
     if old['master_digest']!=master['digest']:raise ValueError('wallet pending identity mismatch')
     failures=old['failures'];deadline=time.monotonic()+seconds;done=0;stop=None;tried=set()
     while done<pages and time.monotonic()<deadline:
-        linked,candidates,_,_=graph(states,roots)
+        linked,candidates,edges,matched=graph(states,roots)
         options=[w for w in candidates if not states.get(w,{}).get('complete') and w not in tried]
         if not options:break
-        w=min(options,key=lambda x:(failures.get(x,{}).get('at',0),states.get(x,{}).get('pages',0),x not in roots,x))
+        # Alternate frontier closure and root discovery, so the graph does not spend
+        # every batch on newly minted wallets while actual delivery edges stay open.
+        weights=defaultdict(int)
+        for mid,m in edges.items():
+            if mid not in matched:weights[m['destination']]+=1
+        def priority(x):
+            return (failures.get(x,{}).get('at',0),
+                    0 if (weights[x]>0 if done%2==0 else x in roots) else 1,
+                    states.get(x,{}).get('pages',0),-weights[x],x)
+        w=min(options,key=priority)
         try:
             dest=folder/'accounts'/key(w);dest.mkdir(parents=True,exist_ok=True)
             if w not in states:
