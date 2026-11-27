@@ -2,14 +2,14 @@ name: Publish provisional JURY dashboard
 on:
   workflow_dispatch:
   workflow_run:
-    workflows: ['Update and audit persistent history']
+    workflows: ['Update and audit persistent history', 'Audit current JURY trace revisions']
     types: [completed]
     branches: [main]
   push:
     branches: [main]
     paths:
       - '.github/workflows/pages.yml'
-      - 'scripts/public_beta.py'
+      - 'scripts/**'
       - 'docs/**'
 permissions:
   contents: read
@@ -18,8 +18,11 @@ concurrency:
   cancel-in-progress: false
 jobs:
   build:
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    if: github.ref == 'refs/heads/main' && (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-24.04
+    outputs:
+      source: ${{ steps.build.outputs.source }}
+      data: ${{ steps.build.outputs.data }}
     timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
@@ -38,14 +41,18 @@ jobs:
         with:
           node-version: '22'
       - name: Validate and build public beta
+        id: build
         run: |
-          git -C history rev-parse HEAD
+          source=$(git rev-parse HEAD)
+          data=$(git -C history rev-parse HEAD)
+          echo "source=$source" >> "$GITHUB_OUTPUT"
+          echo "data=$data" >> "$GITHUB_OUTPUT"
           python3 -m unittest discover -s tests -v
           node tests/analytics.test.mjs
           node tests/wallets.test.mjs
           node tests/integrity.test.mjs
           node tests/cost-basis.test.mjs
-          python3 scripts/public_beta.py --store history --out site
+          python3 scripts/public_beta.py --store history --out site --source-sha "$source" --data-sha "$data"
           node tests/check_public_beta.mjs site
       - run: pip install playwright==1.51.0
       - run: python -m playwright install --with-deps chromium
@@ -58,12 +65,21 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 6
     permissions:
+      contents: read
       pages: write
       id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      - name: Reject superseded release artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ needs.build.outputs.source }}
+          DATA_SHA: ${{ needs.build.outputs.data }}
+        run: |
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)" = "$SOURCE_SHA"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/data" --jq .object.sha)" = "$DATA_SHA"
       - uses: actions/configure-pages@v5
       - name: Deploy validated public beta
         id: deployment
