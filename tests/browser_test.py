@@ -1,8 +1,8 @@
 """Run with installed Playwright/Chromium; uses a synthetic snapshot only in intercepted test responses."""
-import json, threading, functools, sys, os, hashlib, copy
+import json, threading, functools, sys, os, hashlib, copy, re
 from pathlib import Path
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import sync_playwright, expect
 ROOT=Path(__file__).resolve().parents[1]
 server=ThreadingHTTPServer(('127.0.0.1',0),functools.partial(SimpleHTTPRequestHandler,directory=str(ROOT/'docs')))
 threading.Thread(target=server.serve_forever,daemon=True).start()
@@ -23,11 +23,11 @@ with sync_playwright() as p:
     browser=p.chromium.launch(**({'executable_path':os.environ['CHROMIUM_EXECUTABLE']} if os.environ.get('CHROMIUM_EXECUTABLE') else {}),args=['--no-sandbox'])
     for width in [320,375,393,768,1024,1440]:
         page=browser.new_page(viewport={'width':width,'height':900});errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
-        page.goto(base);page.locator('#notice').wait_for();page.wait_for_function("document.querySelector('#status').textContent==='Не индексировано'")
+        page.goto(base);page.locator('#notice').wait_for();expect(page.locator('#status')).to_have_text('Не индексировано')
         assert page.locator('#metrics .metric').first.inner_text()=='—'
-        assert page.evaluate('document.documentElement.scrollWidth <= innerWidth'),width
+        assert page.evaluate('() => document.documentElement.scrollWidth <= innerWidth'),width
         page.route('**/snapshot.json',lambda route:route.fulfill(json=sample))
-        page.reload();page.wait_for_function("document.querySelector('#status').textContent==='Не сверено'")
+        page.reload();expect(page.locator('#status')).to_have_text('Не сверено')
         assert page.locator('#metrics .metric').first.inner_text()=='1'
         assert page.locator('#metrics .metric').nth(1).inner_text()=='1'
         page.locator('#wallet-input').fill(address);page.locator('#search-button').click();assert page.locator('#wallet-detail .mini-metric').count()==9
@@ -37,9 +37,9 @@ with sync_playwright() as p:
         page.locator('[data-period="24h"]').click();assert page.locator('#metrics .metric').nth(1).inner_text()=='0'
         page.locator('#language').click();assert page.locator('#chart-title').inner_text()=='Trading activity'
         page.locator('#filters button').nth(3).click();assert page.locator('#transactions .empty').count()==1
-        assert page.evaluate('document.documentElement.scrollWidth <= innerWidth'),width
+        assert page.evaluate('() => document.documentElement.scrollWidth <= innerWidth'),width
         assert not errors,errors
-        page.unroute('**/snapshot.json');page.route('**/snapshot.json',lambda route:route.fulfill(json={**sample,'cutoff':cutoff+1}));page.reload();page.wait_for_function("document.querySelector('#notice').textContent.includes('Cached version')");assert page.locator('#metrics .metric').first.inner_text()=='1'
+        page.unroute('**/snapshot.json');page.route('**/snapshot.json',lambda route:route.fulfill(json={**sample,'cutoff':cutoff+1}));page.reload();expect(page.locator('#notice')).to_contain_text('Cached version');assert page.locator('#metrics .metric').first.inner_text()=='1'
         if width==393 and os.environ.get('JURY_TEST_SCREENSHOT'):page.screenshot(path=os.environ['JURY_TEST_SCREENSHOT'],full_page=True)
         page.close()
     browser.close()
