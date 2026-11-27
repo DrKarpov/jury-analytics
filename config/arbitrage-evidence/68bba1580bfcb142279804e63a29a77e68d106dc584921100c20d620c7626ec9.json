@@ -1,0 +1,511 @@
+{
+  "version": 1,
+  "trace": "68bba1580bfcb142279804e63a29a77e68d106dc584921100c20d620c7626ec9",
+  "source": "Wallet Agent raw account transactions and event, matched against Toncenter transfer and sale records",
+  "owner": "UQBQHL6sa8u2MJcMZXvQjtfb-RO0NrCbIHNismG4xdDVNUQz",
+  "first": "UQAx3LZfv85D0rvZ3EleTfpDDn9fNziZ0FjpeFalfYt4qBZ_",
+  "second": "UQBKkUTE675HzYjRrm-Daxlnk3F-8vDUt79lFhqJG3jfaGlP",
+  "first_code_hash": "LSvqDip3LW8tXc/y+1F50sdJ+6KS3iFz/apWMcLMt/s=",
+  "time": 1795799477,
+  "root_message": {
+    "event_id": "68bba1580bfcb142279804e63a29a77e68d106dc584921100c20d620c7626ec9",
+    "lt": "119463478000045",
+    "time": 1795799477,
+    "time_iso": "2026-11-27T17:11:17.000Z",
+    "in_progress": false,
+    "message_hash": "ba804eb36317dd12569eaf88e4d1959b05cc46981785a9a0dd5bf0a29a0d7b7c",
+    "actions": [
+      {
+        "type": "other",
+        "action_name": "SmartContractExec",
+        "status": "ok",
+        "direction": "other",
+        "sender": null,
+        "recipient": null,
+        "amount": null,
+        "jetton": null,
+        "nft": null,
+        "comment": null
+      },
+      {
+        "type": "jetton_transfer",
+        "action_name": "JettonTransfer",
+        "status": "ok",
+        "direction": "in",
+        "sender": "UQAx3LZfv85D0rvZ3EleTfpDDn9fNziZ0FjpeFalfYt4qBZ_",
+        "recipient": "UQBQHL6sa8u2MJcMZXvQjtfb-RO0NrCbIHNismG4xdDVNUQz",
+        "amount": {
+          "raw": "26094683475",
+          "decimal": "26.094683475",
+          "decimals": 9
+        },
+        "jetton": {
+          "master": "Ef-_fgHqEczCswLpnBEoIvgyruJUvn_QDt5QRjecY8w3lr2i",
+          "symbol": "JURY",
+          "trust": "whitelist",
+          "trusted": true
+        },
+        "nft": null,
+        "comment": "Call: 0x9d142643"
+      },
+      {
+        "type": "other",
+        "action_name": "JettonSwap",
+        "status": "ok",
+        "direction": "other",
+        "sender": null,
+        "recipient": null,
+        "amount": null,
+        "jetton": null,
+        "nft": null,
+        "comment": null
+      }
+    ]
+  },
+  "transactions": [
+    {
+      "hash": "68bba1580bfcb142279804e63a29a77e68d106dc584921100c20d620c7626ec9",
+      "lt": "119463478000045",
+      "account": "UQBQHL6sa8u2MJcMZXvQjtfb-RO0NrCbIHNismG4xdDVNUQz",
+      "time": 1795799477,
+      "time_iso": "2026-11-27T17:11:17.000Z",
+      "success": true,
+      "fee_gram": {
+        "raw": "1162672",
+        "decimal": "0.001162672",
+        "decimals": 9
+      },
+      "messages": [
+        {
+          "direction": "out",
+          "counterparty": "UQAx3LZfv85D0rvZ3EleTfpDDn9fNziZ0FjpeFalfYt4qBZ_",
+          "amount_gram": {
+            "raw": "7460441564",
+            "decimal": "7.460441564",
+            "decimals": 9
+          },
+          "opcode": "0xfa45056b",
+          "comment": null,
+          "bounced": false
+        }
+      ]
+    },
+    {
+      "hash": "f3b0d1cb3d6d500e6fba9fbeb908db98d184e5384ef80ba02a22d0f97b040909",
+      "lt": "119463478000053",
+      "account": "UQBQHL6sa8u2MJcMZXvQjtfb-RO0NrCbIHNismG4xdDVNUQz",
+      "time": 1795799477,
+      "time_iso": "2026-11-27T17:11:17.000Z",
+      "success": true,
+      "fee_gram": {
+        "raw": "1213222",
+        "decimal": "0.001213222",
+        "decimals": 9
+      },
+      "messages": [
+        {
+          "direction": "in",
+          "counterparty": "UQBQUXR2MlmD0SgQfhkoALzKv1TT4yQaDOMTH3RjbMoD232x",
+          "amount_gram": {
+            "raw": "248657199",
+            "decimal": "0.248657199",
+            "decimals": 9
+          },
+          "opcode": "0x7362d09c",
+          "comment": null,
+          "bounced": false
+        },
+        {
+          "direction": "out",
+          "counterparty": "UQBQUXR2MlmD0SgQfhkoALzKv1TT4yQaDOMTH3RjbMoD232x",
+          "amount_gram": {
+            "raw": "300000000",
+            "decimal": "0.3",
+            "decimals": 9
+          },
+          "opcode": "0x0f8a7ea5",
+          "comment": null,
+          "bounced": false
+        }
+      ]
+    },
+    {
+      "hash": "6a2afb8d9b41ad5b9ff1eaaec7beae58f3c215c842f41f44357740dfccb66b1b",
+      "lt": "119463478000055",
+      "account": "UQBQHL6sa8u2MJcMZXvQjtfb-RO0NrCbIHNismG4xdDVNUQz",
+      "time": 1795799477,
+      "time_iso": "2026-11-27T17:11:17.000Z",
+      "success": true,
+      "fee_gram": {
+        "raw": "299734",
+        "decimal": "0.000299734",
+        "decimals": 9
+      },
+      "messages": [
+        {
+          "direction": "in",
+          "counterparty": "UQBQUXR2MlmD0SgQfhkoALzKv1TT4yQaDOMTH3RjbMoD232x",
+          "amount_gram": {
+            "raw": "47091774",
+            "decimal": "0.047091774",
+            "decimals": 9
+          },
+          "opcode": "0xd53276db",
+          "comment": null,
+          "bounced": false
+        }
+      ]
+    },
+    {
+      "hash": "12ece972970118b9f4d04a105731c40557e2286283dd095a0d5aabf6350cea7c",
+      "lt": "119463478000060",
+      "account": "UQBQHL6sa8u2MJcMZXvQjtfb-RO0NrCbIHNismG4xdDVNUQz",
+      "time": 1795799477,
+      "time_iso": "2026-11-27T17:11:17.000Z",
+      "success": true,
+      "fee_gram": {
+        "raw": "299734",
+        "decimal": "0.000299734",
+        "decimals": 9
+      },
+      "messages": [
+        {
+          "direction": "in",
+          "counterparty": "UQBKKVTR34mY_oDXb3b524bj94zsQ7EWL3pYVwWy20UQVWu7",
+          "amount_gram": {
+            "raw": "47071028",
+            "decimal": "0.047071028",
+            "decimals": 9
+          },
+          "opcode": "0xd53276db",
+          "comment": null,
+          "bounced": false
+        }
+      ]
+    },
+    {
+      "hash": "5ec0e7923e657c5c6cf49f1e1870e6a602a6e36c144bcee7a035d33e5d770744",
+      "lt": "119463478000062",
+      "account": "UQBQHL6sa8u2MJcMZXvQjtfb-RO0NrCbIHNismG4xdDVNUQz",
+      "time": 1795799477,
+      "time_iso": "2026-11-27T17:11:17.000Z",
+      "success": true,
+      "fee_gram": {
+        "raw": "359534",
+        "decimal": "0.000359534",
+        "decimals": 9
+      },
+      "messages": [
+        {
+          "direction": "in",
+          "counterparty": "UQBKkUTE675HzYjRrm-Daxlnk3F-8vDUt79lFhqJG3jfaGlP",
+          "amount_gram": {
+            "raw": "7209799513",
+            "decimal": "7.209799513",
+            "decimals": 9
+          },
+          "opcode": "0x3216ca09",
+          "comment": null,
+          "bounced": false
+        }
+      ]
+    },
+    {
+      "hash": "d1641932d105af8f5d70055f6a2a589262c95bf6505083dfcc99809fe6d0a321",
+      "lt": "119463478000063",
+      "account": "UQBQHL6sa8u2MJcMZXvQjtfb-RO0NrCbIHNismG4xdDVNUQz",
+      "time": 1795799477,
+      "time_iso": "2026-11-27T17:11:17.000Z",
+      "success": true,
+      "fee_gram": {
+        "raw": "97534",
+        "decimal": "0.000097534",
+        "decimals": 9
+      },
+      "messages": [
+        {
+          "direction": "in",
+          "counterparty": "UQBKkUTE675HzYjRrm-Daxlnk3F-8vDUt79lFhqJG3jfaGlP",
+          "amount_gram": {
+            "raw": "247533971",
+            "decimal": "0.247533971",
+            "decimals": 9
+          },
+          "opcode": "0xd53276db",
+          "comment": null,
+          "bounced": false
+        }
+      ]
+    },
+    {
+      "hash": "c4cf9a3eb18d4a4ea2747bce75f463ca9f8fc0627f406532b206ca8affd18e7d",
+      "lt": "119463478000047",
+      "account": "UQAx3LZfv85D0rvZ3EleTfpDDn9fNziZ0FjpeFalfYt4qBZ_",
+      "time": 1795799477,
+      "time_iso": "2026-11-27T17:11:17.000Z",
+      "success": true,
+      "fee_gram": {
+        "raw": "831556",
+        "decimal": "0.000831556",
+        "decimals": 9
+      },
+      "messages": [
+        {
+          "direction": "in",
+          "counterparty": "UQBQHL6sa8u2MJcMZXvQjtfb-RO0NrCbIHNismG4xdDVNUQz",
+          "amount_gram": {
+            "raw": "7460441564",
+            "decimal": "7.460441564",
+            "decimals": 9
+          },
+          "opcode": "0xfa45056b",
+          "comment": null,
+          "bounced": false
+        },
+        {
+          "direction": "out",
+          "counterparty": "UQAx1gjuOcWHhQvMbh7COmtCICVtxvAC8ORd8cYXXwGRK1F9",
+          "amount_gram": {
+            "raw": "298527531",
+            "decimal": "0.298527531",
+            "decimals": 9
+          },
+          "opcode": "0x0f8a7ea5",
+          "comment": null,
+          "bounced": false
+        }
+      ]
+    },
+    {
+      "hash": "5abe3725cd83440781758580d34fc7dc803f06e244d240cf9fc2f495f4e33977",
+      "lt": "119463478000051",
+      "account": "UQBQUXR2MlmD0SgQfhkoALzKv1TT4yQaDOMTH3RjbMoD232x",
+      "time": 1795799477,
+      "time_iso": "2026-11-27T17:11:17.000Z",
+      "success": true,
+      "fee_gram": {
+        "raw": "557375",
+        "decimal": "0.000557375",
+        "decimals": 9
+      },
+      "messages": [
+        {
+          "direction": "in",
+          "counterparty": "UQAx1gjuOcWHhQvMbh7COmtCICVtxvAC8ORd8cYXXwGRK1F9",
+          "amount_gram": {
+            "raw": "296423729",
+            "decimal": "0.296423729",
+            "decimals": 9
+          },
+          "opcode": "0x178d4519",
+          "comment": null,
+          "bounced": false
+        },
+        {
+          "direction": "out",
+          "counterparty": "UQBQHL6sa8u2MJcMZXvQjtfb-RO0NrCbIHNismG4xdDVNUQz",
+          "amount_gram": {
+            "raw": "248657199",
+            "decimal": "0.248657199",
+            "decimals": 9
+          },
+          "opcode": "0x7362d09c",
+          "comment": null,
+          "bounced": false
+        },
+        {
+          "direction": "out",
+          "counterparty": "UQBQHL6sa8u2MJcMZXvQjtfb-RO0NrCbIHNismG4xdDVNUQz",
+          "amount_gram": {
+            "raw": "47091774",
+            "decimal": "0.047091774",
+            "decimals": 9
+          },
+          "opcode": "0xd53276db",
+          "comment": null,
+          "bounced": false
+        }
+      ]
+    },
+    {
+      "hash": "b3289a10e194683e2fb21a575b441fc1706c5664e859b471a26aa6a6d765a588",
+      "lt": "119463478000055",
+      "account": "UQBQUXR2MlmD0SgQfhkoALzKv1TT4yQaDOMTH3RjbMoD232x",
+      "time": 1795799477,
+      "time_iso": "2026-11-27T17:11:17.000Z",
+      "success": true,
+      "fee_gram": {
+        "raw": "1011147",
+        "decimal": "0.001011147",
+        "decimals": 9
+      },
+      "messages": [
+        {
+          "direction": "in",
+          "counterparty": "UQBQHL6sa8u2MJcMZXvQjtfb-RO0NrCbIHNismG4xdDVNUQz",
+          "amount_gram": {
+            "raw": "300000000",
+            "decimal": "0.3",
+            "decimals": 9
+          },
+          "opcode": "0x0f8a7ea5",
+          "comment": null,
+          "bounced": false
+        },
+        {
+          "direction": "out",
+          "counterparty": "UQBKKVTR34mY_oDXb3b524bj94zsQ7EWL3pYVwWy20UQVWu7",
+          "amount_gram": {
+            "raw": "297820798",
+            "decimal": "0.297820798",
+            "decimals": 9
+          },
+          "opcode": "0x178d4519",
+          "comment": null,
+          "bounced": false
+        }
+      ]
+    },
+    {
+      "hash": "3a042029912df37107a20d129add8e03ddcc031e296174e28a1981288b6ad6de",
+      "lt": "119463478000059",
+      "account": "UQBKkUTE675HzYjRrm-Daxlnk3F-8vDUt79lFhqJG3jfaGlP",
+      "time": 1795799477,
+      "time_iso": "2026-11-27T17:11:17.000Z",
+      "success": true,
+      "fee_gram": {
+        "raw": "2145536",
+        "decimal": "0.002145536",
+        "decimals": 9
+      },
+      "messages": [
+        {
+          "direction": "in",
+          "counterparty": "UQBKKVTR34mY_oDXb3b524bj94zsQ7EWL3pYVwWy20UQVWu7",
+          "amount_gram": {
+            "raw": "250000000",
+            "decimal": "0.25",
+            "decimals": 9
+          },
+          "opcode": "0x7362d09c",
+          "comment": null,
+          "bounced": false
+        },
+        {
+          "direction": "out",
+          "counterparty": "UQBQHL6sa8u2MJcMZXvQjtfb-RO0NrCbIHNismG4xdDVNUQz",
+          "amount_gram": {
+            "raw": "7209799513",
+            "decimal": "7.209799513",
+            "decimals": 9
+          },
+          "opcode": "0x3216ca09",
+          "comment": null,
+          "bounced": false
+        },
+        {
+          "direction": "out",
+          "counterparty": "UQBQHL6sa8u2MJcMZXvQjtfb-RO0NrCbIHNismG4xdDVNUQz",
+          "amount_gram": {
+            "raw": "247533971",
+            "decimal": "0.247533971",
+            "decimals": 9
+          },
+          "opcode": "0xd53276db",
+          "comment": null,
+          "bounced": false
+        }
+      ]
+    },
+    {
+      "hash": "1bd1d17b41dcef2ecc02db5ba0bd329ced32dfc93584f880f883a3e44b496486",
+      "lt": "119463478000057",
+      "account": "UQBKKVTR34mY_oDXb3b524bj94zsQ7EWL3pYVwWy20UQVWu7",
+      "time": 1795799477,
+      "time_iso": "2026-11-27T17:11:17.000Z",
+      "success": true,
+      "fee_gram": {
+        "raw": "582122",
+        "decimal": "0.000582122",
+        "decimals": 9
+      },
+      "messages": [
+        {
+          "direction": "in",
+          "counterparty": "UQBQUXR2MlmD0SgQfhkoALzKv1TT4yQaDOMTH3RjbMoD232x",
+          "amount_gram": {
+            "raw": "297820798",
+            "decimal": "0.297820798",
+            "decimals": 9
+          },
+          "opcode": "0x178d4519",
+          "comment": null,
+          "bounced": false
+        },
+        {
+          "direction": "out",
+          "counterparty": "UQBKkUTE675HzYjRrm-Daxlnk3F-8vDUt79lFhqJG3jfaGlP",
+          "amount_gram": {
+            "raw": "250000000",
+            "decimal": "0.25",
+            "decimals": 9
+          },
+          "opcode": "0x7362d09c",
+          "comment": null,
+          "bounced": false
+        },
+        {
+          "direction": "out",
+          "counterparty": "UQBQHL6sa8u2MJcMZXvQjtfb-RO0NrCbIHNismG4xdDVNUQz",
+          "amount_gram": {
+            "raw": "47071028",
+            "decimal": "0.047071028",
+            "decimals": 9
+          },
+          "opcode": "0xd53276db",
+          "comment": null,
+          "bounced": false
+        }
+      ]
+    },
+    {
+      "hash": "4d31debceef3c4708cee9a9415a52350dab76bc38f139fb6935f911c1cf56fa3",
+      "lt": "119463478000049",
+      "account": "UQAx1gjuOcWHhQvMbh7COmtCICVtxvAC8ORd8cYXXwGRK1F9",
+      "time": 1795799477,
+      "time_iso": "2026-11-27T17:11:17.000Z",
+      "success": true,
+      "fee_gram": {
+        "raw": "986014",
+        "decimal": "0.000986014",
+        "decimals": 9
+      },
+      "messages": [
+        {
+          "direction": "in",
+          "counterparty": "UQAx3LZfv85D0rvZ3EleTfpDDn9fNziZ0FjpeFalfYt4qBZ_",
+          "amount_gram": {
+            "raw": "298527531",
+            "decimal": "0.298527531",
+            "decimals": 9
+          },
+          "opcode": "0x0f8a7ea5",
+          "comment": null,
+          "bounced": false
+        },
+        {
+          "direction": "out",
+          "counterparty": "UQBQUXR2MlmD0SgQfhkoALzKv1TT4yQaDOMTH3RjbMoD232x",
+          "amount_gram": {
+            "raw": "296423729",
+            "decimal": "0.296423729",
+            "decimals": 9
+          },
+          "opcode": "0x178d4519",
+          "comment": null,
+          "bounced": false
+        }
+      ]
+    }
+  ]
+}

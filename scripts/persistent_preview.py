@@ -11,6 +11,7 @@ from repair_overlay import overlay
 from payout_repair import overlay as payout_overlay
 from delivery_repair import overlay as delivery_overlay
 from revision_evidence import lineage
+from arbitrage import overlay as arbitrage_overlay
 
 def corrected_history(store, seed=None):
     seed=load_seed(store) if seed is None else seed
@@ -18,6 +19,7 @@ def corrected_history(store, seed=None):
     repairs=overlay(store,seed,h)
     payouts,_=payout_overlay(store,seed,h)
     deliveries,_=delivery_overlay(store,seed,h)
+    arbitrage_overlay(h)
     return h, repairs, payouts, deliveries
 
 def bundle(store):
@@ -51,6 +53,11 @@ def bundle(store):
     ev['payout_repairs']=payouts
     ev['delivery_repairs']=deliveries
     ev['holder_status']=holder_status
+    from arbitrage import evidence_records, verify, candidate_pairs
+    # Replay on uncorrected history for a stable proof summary; existing repair overlays remain separate.
+    base=load_history(store,seed)
+    cycles=[verify(r,base.traces[r['trace']],base.events[r['trace']])[1] for r in evidence_records() if r['trace'] in base.traces]
+    ev['arbitrage']={'verified_cycles':cycles,'additional_candidate_cycles':sum(bool(candidate_pairs(rows,h.events.get(t,[]))) for t,rows in h.traces.items()),'scope':'wallet cashflow for verified circular swaps; missing DEX quotes excluded from volume'}
     ev['history_head']=h.head
     ev['revision_lineage']=lineage(store,seed,h)
     ev['digest']=digest(ev)

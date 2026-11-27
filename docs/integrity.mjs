@@ -13,7 +13,7 @@ export async function verifySnapshot(d){
  if(new Set(d.transfers.map(x=>x.trace)).size!==d.trace_count)throw Error('trace count mismatch');
  const traces=new Set(d.transfers.map(x=>x.trace)),seen=new Set();
  for(const r of d.transfers)if(!/^\d+$/.test(r.lt)||BigInt(r.lt)<=0n)throw Error('invalid LT');
- for(const e of d.events)if(!hash.test(e.id)||e.time<=0||BigInt(e.amount_raw)<=0n||(e.kind!=='transfer'&&BigInt(e.quote_raw)<=0n))throw Error('invalid operation');
+ for(const e of d.events)if(!hash.test(e.id)||e.time<=0||BigInt(e.amount_raw)<=0n||(e.kind!=='transfer'&&BigInt(e.quote_raw)<=0n&&!(e.kind==='buy'&&e.quote_asset==='UNKNOWN'&&e.quote_raw==='0'&&e.quote_status==='unresolved')))throw Error('invalid operation');
  for(const u of d.unresolved){if(u.kind!=='unresolved'||!traces.has(u.trace)||seen.has(u.trace)||!Number.isSafeInteger(u.time)||u.time<=0||u.time>d.cutoff)throw Error('invalid unresolved trace');seen.add(u.trace)}
  if(evidence){
   if(!hash.test(evidence.digest))throw Error('missing evidence digest');
