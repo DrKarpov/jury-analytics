@@ -33,6 +33,11 @@ def bundle(store):
     holders,holder_status=holder_evidence(store,d)
     out=assemble(c,a,holders,liquidity,lifecycle)
     ev=out['evidence'];ev.pop('digest')
+    resolved=repairs['active_resolutions']+payouts['active_resolutions']+deliveries['active_resolutions']
+    if resolved>seed_audit['mismatch']:raise ValueError('repair count exceeds audit mismatches')
+    seed_audit['reconciled_mismatches']=resolved
+    seed_audit['remaining_mismatches']=seed_audit['mismatch']-resolved
+    seed_audit['matched_after_repairs']=seed_audit['matched']+resolved
     ev['seed_audit']=seed_audit
     ev['repairs']=repairs
     ev['payout_repairs']=payouts

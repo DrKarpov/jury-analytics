@@ -8,6 +8,7 @@ from recovery import load_seed,read
 from incremental import load_history
 from repair_overlay import overlay
 from payout_repair import overlay as payout_overlay
+from delivery_repair import overlay as delivery_overlay
 from discrepancy import tree_index
 
 VERSION=1
@@ -61,7 +62,7 @@ def validate_record(r,t,fp):
     return r
 
 def run(store,center=request,alternate=tonapi_request,limit=100,raw_limit=12,seconds=180):
-    seed=load_seed(store);h=load_history(store,seed);overlay(store,seed,h);payout_overlay(store,seed,h)
+    seed=load_seed(store);h=load_history(store,seed);overlay(store,seed,h);payout_overlay(store,seed,h);delivery_overlay(store,seed,h)
     c=h.candidate();folder=store/'triage'/'v1';folder.mkdir(parents=True,exist_ok=True)
     rawfolder=store/'triage-raw'/'v1';rawfolder.mkdir(parents=True,exist_ok=True)
     reasons=Counter();groups=Counter();known={};pending=[];raw_done=set()

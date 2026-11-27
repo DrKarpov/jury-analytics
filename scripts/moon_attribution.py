@@ -8,6 +8,7 @@ from recovery import load_seed,read
 from incremental import load_history
 from repair_overlay import overlay
 from payout_repair import overlay as payout_overlay
+from delivery_repair import overlay as delivery_overlay
 
 def registry():
     r=read(ROOT/'config/moon-registry.json')
@@ -37,7 +38,7 @@ def referral_fields(obj,path=''):
         for i,v in enumerate(obj):yield from referral_fields(v,f'{path}[{i}]')
 
 def run(store,fetch=request,limit=1000):
-    seed=load_seed(store);h=load_history(store,seed);overlay(store,seed,h);payout_overlay(store,seed,h)
+    seed=load_seed(store);h=load_history(store,seed);overlay(store,seed,h);payout_overlay(store,seed,h);delivery_overlay(store,seed,h)
     hashes,known=registry()
     accounts=Counter(a for r in h.transfers.values() for a in (r['source'],r['destination']))
     selected=sorted(accounts,key=lambda a:(-accounts[a],a))[:limit]

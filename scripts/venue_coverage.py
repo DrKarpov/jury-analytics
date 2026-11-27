@@ -6,6 +6,7 @@ from recovery import load_seed
 from incremental import load_history
 from repair_overlay import overlay
 from payout_repair import overlay as payout_overlay
+from delivery_repair import overlay as delivery_overlay
 from indexer import digest,publish
 
 def inventory(candidate):
@@ -23,7 +24,7 @@ def inventory(candidate):
 
 def main():
     p=argparse.ArgumentParser();p.add_argument('--store',type=Path,required=True);p.add_argument('--out',type=Path,required=True);a=p.parse_args()
-    seed=load_seed(a.store);h=load_history(a.store,seed);overlay(a.store,seed,h);payout_overlay(a.store,seed,h)
+    seed=load_seed(a.store);h=load_history(a.store,seed);overlay(a.store,seed,h);payout_overlay(a.store,seed,h);delivery_overlay(a.store,seed,h)
     result=inventory(h.candidate());result['digest']=digest(result)
     a.out.parent.mkdir(parents=True,exist_ok=True);publish(result,a.out);print(json.dumps(result),flush=True)
 

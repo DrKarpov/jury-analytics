@@ -16,7 +16,7 @@ concurrency:
 jobs:
   recover-audit:
     runs-on: ubuntu-24.04
-    timeout-minutes: 22
+    timeout-minutes: 26
     steps:
       - uses: actions/checkout@v4
         with:
@@ -119,6 +119,22 @@ jobs:
           git -C store add -A
           if ! git -C store diff --cached --quiet; then
             git -C store commit -m 'Checkpoint verified final payout evidence'
+            git -C store push origin HEAD:data
+          fi
+      - name: Verify additional ambiguous token deliveries
+        id: delivery
+        if: ${{ !cancelled() && steps.audit.outcome == 'success' }}
+        timeout-minutes: 4
+        env:
+          TONCENTER_API_KEY: ''
+          TONAPI_API_KEY: ${{ secrets.TONAPI_API_KEY }}
+        run: python3 -u source/scripts/delivery_repair.py --store store
+      - name: Persist completed delivery checks
+        if: ${{ !cancelled() && steps.delivery.outcome == 'success' }}
+        run: |
+          git -C store add -A
+          if ! git -C store diff --cached --quiet; then
+            git -C store commit -m 'Checkpoint verified token delivery evidence'
             git -C store push origin HEAD:data
           fi
       - name: Automatically reconcile known historical discrepancy pattern
