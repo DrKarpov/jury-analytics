@@ -1,0 +1,71 @@
+name: Recover and audit saved history
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/recovery.yml'
+  schedule:
+    - cron: '7,22,37,52 * * * *'
+permissions:
+  contents: write
+  actions: read
+concurrency:
+  group: jury-persistent-data
+  cancel-in-progress: false
+jobs:
+  recover-audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          path: source
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: data
+          path: store
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate checkpoint implementation
+        run: python3 -m unittest discover -s source/tests -p test_recovery.py -v
+      - name: Check for saved seed
+        id: seed
+        run: |
+          if test -f store/seed/manifest.json; then
+            echo "needed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "needed=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/download-artifact@v4
+        if: steps.seed.outputs.needed == 'true'
+        with:
+          name: staging-snapshot
+          path: seed-input
+          run-id: 46001289693
+          github-token: ${{ github.token }}
+      - name: Recover and commit immutable history
+        if: steps.seed.outputs.needed == 'true'
+        run: |
+          python3 source/scripts/recovery.py seed --input seed-input/staging --store store
+          git -C store config user.name 'github-actions[bot]'
+          git -C store config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git -C store add seed
+          git -C store commit -m 'Recover primary JURY history from staging artifact'
+          git -C store push origin HEAD:data
+      - name: Audit next bounded batch
+        env:
+          TONAPI_API_KEY: ${{ secrets.TONAPI_API_KEY }}
+        run: python3 -u source/scripts/recovery.py audit --store store --limit 100 --seconds 240
+      - name: Persist completed audit checkpoint
+        run: |
+          git -C store config user.name 'github-actions[bot]'
+          git -C store config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git -C store add -A
+          if ! git -C store diff --cached --quiet; then
+            git -C store commit -m 'Checkpoint independent trace audit'
+            git -C store push origin HEAD:data
+          fi
