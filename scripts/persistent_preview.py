@@ -8,12 +8,14 @@ from preview import assemble
 from holder_state import evidence as holder_evidence
 from repair_overlay import overlay
 from payout_repair import overlay as payout_overlay
+from delivery_repair import overlay as delivery_overlay
 
 def bundle(store):
     seed=load_seed(store)
     h=load_history(store,seed)
     repairs=overlay(store,seed,h)
     payouts,_=payout_overlay(store,seed,h)
+    deliveries,_=delivery_overlay(store,seed,h)
     c=h.candidate()
     ids,cursor,counts=load_progress(store,seed)
     # Seed audit has its own identity; it must never be presented as an audit of the new candidate.
@@ -34,6 +36,7 @@ def bundle(store):
     ev['seed_audit']=seed_audit
     ev['repairs']=repairs
     ev['payout_repairs']=payouts
+    ev['delivery_repairs']=deliveries
     ev['holder_status']=holder_status
     ev['history_head']=h.head
     ev['digest']=digest(ev)

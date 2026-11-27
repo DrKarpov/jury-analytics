@@ -84,9 +84,11 @@ def run(store,center=request,alternate=tonapi_request,limit=40,seconds=100,seed=
     history=load_history(store,seed);result=overlay(store,seed,history)
     from payout_repair import overlay as payout_overlay
     payouts,payout_active=payout_overlay(store,seed,history,ctx)
+    from delivery_repair import overlay as delivery_overlay
+    deliveries,delivery_active=delivery_overlay(store,seed,history,ctx)
     queue=[]
     for t,a in sorted(audit.items()):
-        if t in payout_active:continue
+        if t in payout_active or t in delivery_active:continue
         if (folder/(t+'.json')).exists():
             r=read(folder/(t+'.json'))
             same=digest(sorted(history.traces.get(t,[]),key=lambda r:r['tx']))==r['transfer_digest']
@@ -98,7 +100,7 @@ def run(store,center=request,alternate=tonapi_request,limit=40,seconds=100,seed=
         else:status='pending_alias_check' if t in unresolved else 'other_rule_required'
         queue.append({'trace':t,'category':category(a),'status':status})
     ids,cursor,counts=load_progress(store,seed)
-    if len(queue)!=counts['mismatch']-result['active_resolutions']-payouts['active_resolutions']:
+    if len(queue)!=counts['mismatch']-result['active_resolutions']-payouts['active_resolutions']-deliveries['active_resolutions']:
         raise ValueError('repair queue coverage mismatch')
     q={'seed_digest':seed['digest'],'history_head':history.head,'audit_attempted':cursor,
        'remaining':len(queue),'by_category':dict(Counter(r['category'] for r in queue)),
@@ -106,7 +108,7 @@ def run(store,center=request,alternate=tonapi_request,limit=40,seconds=100,seed=
     q['digest']=digest(q);publish(q,store/'repair-queue.json')
     status={'seed_digest':seed['digest'],'history_head':history.head,**result,
             'examined_this_run':examined,'installed_this_run':installed,
-            'payout_resolutions':payouts['active_resolutions'],'remaining_mismatches':len(queue),'pending_alias_checks':q['by_status'].get('pending_alias_check',0),
+            'payout_resolutions':payouts['active_resolutions'],'delivery_resolutions':deliveries['active_resolutions'],'remaining_mismatches':len(queue),'pending_alias_checks':q['by_status'].get('pending_alias_check',0),
             'seed_audit_attempted':cursor,'seed_audit_unavailable':counts['unavailable'],
             'stop_reason':stop}
     publish(status,store/'repair-status.json');print(json.dumps(status),flush=True)

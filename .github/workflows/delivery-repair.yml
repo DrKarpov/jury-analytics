@@ -1,0 +1,51 @@
+name: Reconcile ambiguous but delivered JURY swaps
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/delivery-repair.yml'
+      - 'scripts/delivery_repair.py'
+      - 'tests/test_delivery_repair.py'
+permissions:
+  contents: write
+concurrency:
+  group: jury-persistent-data
+  cancel-in-progress: false
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: source
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: data
+          path: store
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Reproduce saved traces
+        env:
+          JURY_HISTORY_FIXTURES: store
+        run: python3 -m unittest discover -s source/tests -v
+      - name: Reconcile and verify independent observations
+        env:
+          TONCENTER_API_KEY: ''
+          TONAPI_API_KEY: ${{ secrets.TONAPI_API_KEY }}
+        run: |
+          python3 -u source/scripts/delivery_repair.py --store store
+          python3 -u source/scripts/auto_repair.py --store store --limit 1 --seconds 20
+          python3 source/scripts/persistent_preview.py --store store --out preview
+      - name: Save validated repairs
+        run: |
+          git -C store config user.name 'github-actions[bot]'
+          git -C store config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git -C store add -A
+          if ! git -C store diff --cached --quiet; then
+            git -C store commit -m 'Checkpoint independently verified exact delivery repairs'
+            git -C store push origin HEAD:data
+          fi

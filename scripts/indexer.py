@@ -74,7 +74,7 @@ def endpoint_asset(value, expected, dex, allow_alias=True):
         return TOKEN
     return actual
 
-def classify(trace, actions, rows, cutoff, allow_alias=True):
+def classify(trace, actions, rows, cutoff, allow_alias=True, swap_matcher=None):
     """Count settled provider-classified endpoint swaps, not intermediate peer legs.
     No inference from direction of transfer alone. Unresolved traces remain visible.
     """
@@ -101,6 +101,8 @@ def classify(trace, actions, rows, cutoff, allow_alias=True):
                 field='destination' if side=='buy' else 'source'
                 owner=address(o['destination'] if side=='buy' else i['source'])
                 matches=[r for r in rows if not r['aborted'] and r[field]==owner and int(r['amount_raw'])==qty]
+                if swap_matcher is not None:
+                    matches=swap_matcher(a,o if side=='buy' else i,matches,qty)
                 if len(matches)!=1: raise ValueError('no unique matching transfer')
                 events.append(dict(id=aid,trace=trace,time=stamp,kind=side,wallet=owner,initiator=sender,amount_raw=str(qty),quote_asset=ai if side=='buy' else ao,quote_raw=str(ni if side=='buy' else no),venue=d.get('dex') or 'unknown',transfer_tx=matches[0]['tx']))
             except (KeyError,ValueError,TypeError,AttributeError): uncertain=True; reasons.append('unverified_swap')
