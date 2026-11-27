@@ -4,6 +4,7 @@ from pathlib import Path
 from indexer import ROOT, digest, publish
 from recovery import load_seed, load_progress, read
 from incremental import load_history
+from current_audit import coverage
 from preview import assemble
 from holder_state import evidence as holder_evidence
 from repair_overlay import overlay
@@ -11,12 +12,17 @@ from payout_repair import overlay as payout_overlay
 from delivery_repair import overlay as delivery_overlay
 from revision_evidence import lineage
 
-def bundle(store):
-    seed=load_seed(store)
+def corrected_history(store, seed=None):
+    seed=load_seed(store) if seed is None else seed
     h=load_history(store,seed)
     repairs=overlay(store,seed,h)
     payouts,_=payout_overlay(store,seed,h)
     deliveries,_=delivery_overlay(store,seed,h)
+    return h, repairs, payouts, deliveries
+
+def bundle(store):
+    seed=load_seed(store)
+    h, repairs, payouts, deliveries = corrected_history(store, seed)
     c=h.candidate()
     ids,cursor,counts=load_progress(store,seed)
     # Seed audit has its own identity; it must never be presented as an audit of the new candidate.
@@ -40,6 +46,7 @@ def bundle(store):
     seed_audit['remaining_mismatches']=seed_audit['mismatch']-resolved
     seed_audit['matched_after_repairs']=seed_audit['matched']+resolved
     ev['seed_audit']=seed_audit
+    ev['current_trace_audit']=coverage(store,h)
     ev['repairs']=repairs
     ev['payout_repairs']=payouts
     ev['delivery_repairs']=deliveries

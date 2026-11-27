@@ -57,3 +57,26 @@ class IncrementalTests(unittest.TestCase):
             with self.assertRaises(OSError):advance(p,f,105,c)
             self.assertEqual(load_history(p,c).cutoff,101)
             self.assertFalse((p/'updates').exists())
+
+    def test_catchup_commits_bounded_contiguous_windows(self):
+        c=seed()
+        with tempfile.TemporaryDirectory() as tmp:
+            p=Path(tmp)
+            report=advance(p,fixture([row(1)],[swap()]),100000,c,max_windows=3)
+            self.assertEqual(report['windows'],3)
+            self.assertEqual(load_history(p,c).cutoff,10901)
+            self.assertEqual(len(list((p/'updates').glob('batch-*.json'))),3)
+
+    def test_catchup_keeps_completed_windows_if_provider_fails(self):
+        c=seed()
+        fetch=fixture([row(1)],[swap()])
+        def later_failure(endpoint,params):
+            if params.get('end_utime',0)>3701:
+                raise OSError('offline')
+            return fetch(endpoint,params)
+        with tempfile.TemporaryDirectory() as tmp:
+            p=Path(tmp)
+            report=advance(p,later_failure,100000,c,max_windows=3)
+            self.assertEqual(report['stop_reason'],'OSError')
+            self.assertEqual(report['windows'],1)
+            self.assertEqual(load_history(p,c).cutoff,3701)

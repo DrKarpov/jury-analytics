@@ -41,6 +41,7 @@ def run(store,center=request,alternate=tonapi_request,limit=40,seconds=100,seed=
     def bounded(fetch):
         def get(e,p):
             if time.monotonic()>=deadline:raise TimeoutError('repair time budget exhausted')
+            if fetch in (request,tonapi_request):return fetch(e,p,deadline=deadline)
             return fetch(e,p)
         return get
     cf,af=bounded(center),bounded(alternate)

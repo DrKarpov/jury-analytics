@@ -1,6 +1,7 @@
 """Recover the completed primary candidate and audit it in persistent, bounded batches."""
 import argparse, json, time, urllib.error
 from pathlib import Path
+from functools import partial
 from collections import Counter, defaultdict
 from indexer import digest, publish, integer, MASTER
 from audit import tonapi_swaps
@@ -96,6 +97,8 @@ def load_progress(store,c):
 def audit_batch(store,c,fetch=tonapi_request,limit=100,seconds=240):
     if not 1<=limit<=300 or seconds<=0: raise ValueError('invalid batch limits')
     ids,start,counts=load_progress(store,c); grouped=primary(c); rows=[]; deadline=time.monotonic()+seconds
+    if fetch is tonapi_request:
+        fetch = partial(tonapi_request, deadline=deadline)
     for trace in ids[start:start+limit]:
         if time.monotonic()>=deadline: break
         try:
