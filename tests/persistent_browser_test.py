@@ -27,8 +27,9 @@ try:
             expect(page.locator('#staging-badge')).to_be_visible()
             if snapshot['evidence']['mode']=='public_beta':
                 expect(page.locator('#staging-badge')).to_contain_text('Бета-версия')
-                expect(page.locator('#notice')).to_contain_text('Предварительные данные')
+                expect(page.locator('#notice')).to_contain_text('Покрытие истории JURY неполное')
                 expect(page.locator('#notice')).to_contain_text('История до')
+                expect(page.locator('#available-history')).to_have_text('Доступная история')
             expect(page.locator('#audit-line')).to_contain_text('Сверка исходной истории')
             for i,n in enumerate(counts):
                 raw=page.locator('#metrics .metric').nth(i).inner_text()
