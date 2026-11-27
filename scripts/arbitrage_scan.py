@@ -61,7 +61,7 @@ def raw_record(t,a,b,sell,tree,event=None):
             actions.append({'type':'jetton_transfer','status':'ok','action_name':typ,'sender':peer(d['sender']),'recipient':peer(d['recipient']),'jetton':{'master':TOKEN},'amount':amt(d['amount'])})
         elif typ=='JettonSwap' and x['status']=='ok':
             actions.append({'type':'other','status':'ok','action_name':typ})
-    return {'version':2,'trace':t,'owner':w,'first':p,'second':q,'time':a['time'],
+    return {'version':3,'trace':t,'owner':w,'first':p,'second':q,'time':a['time'],
             'source':'TonAPI raw trace and decoded jetton deliveries matched against Toncenter transfer index',
             'root_message':{'event_id':t,'in_progress':False,'time':a['time'],'actions':actions},
             'transactions':txs}
@@ -69,13 +69,16 @@ def raw_record(t,a,b,sell,tree,event=None):
 def run(store,fetch=tonapi_request,seconds=180,limit=100):
     h=load_history(store);folder=store/'arbitrage'/'v1';verified=folder/'verified';verified.mkdir(parents=True,exist_ok=True)
     known={r['trace'] for r in evidence_records(store)}
+    # Avoid racing a separately validated classification repair.
+    repaired={read(p)['trace'] for p in (store/'repairs').glob('*/*.json')}
     candidates=[]
     for t,rows in h.traces.items():
+        if t in repaired:continue
         for a,b,sell in candidate_pairs(rows,h.events.get(t,[])):
             candidates.append((t,a,b,sell))
     candidates.sort(key=lambda x:(x[1]['time'],x[0]))
     pending=folder/'attempts.json';old=read(pending) if pending.exists() else {}
-    old={t:x for t,x in old.items() if x.get('rule_version')==2}
+    old={t:x for t,x in old.items() if x.get('rule_version')==3}
     attempts=0;added=0;stop=None;deadline=time.monotonic()+seconds
     if fetch is tonapi_request:fetch=partial(fetch,deadline=deadline)
     for t,a,b,sell in candidates:
@@ -89,7 +92,7 @@ def run(store,fetch=tonapi_request,seconds=180,limit=100):
         except OSError as e:
             stop=type(e).__name__;break
         except (ValueError,KeyError,TypeError,AttributeError) as e:
-            old[t]={'rule_version':2,'reason':type(e).__name__+': '+str(e)[:160],'at':int(time.time())}
+            old[t]={'rule_version':3,'reason':type(e).__name__+': '+str(e)[:160],'at':int(time.time())}
             continue
         publish(r,verified/(t+'.json'));known.add(t);added+=1
         if added<=3 or added%25==0:print('VERIFIED CYCLE',t,cycle['native_net_raw'],flush=True)

@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - 'scripts/arbitrage_scan.py'
+      - 'scripts/route_proof.py'
+      - 'scripts/arbitrage.py'
       - '.github/workflows/arbitrage.yml'
   schedule:
     - cron: '44 * * * *'

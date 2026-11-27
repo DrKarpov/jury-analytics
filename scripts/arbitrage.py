@@ -29,7 +29,11 @@ def candidate_pairs(rows,events):
 def verify(record,rows,events):
     pairs=candidate_pairs(rows,events)
     if len(pairs)!=1:raise ValueError('cycle baseline mismatch')
-    a,b,sell=pairs[0];t=record['trace'];stamp=record['time'];w,p,q=map(address,(record['owner'],record['first'],record['second']))
+    a,b,sell=pairs[0]
+    if record['version']==3:
+        from route_proof import verify_route
+        return verify_route(record,a,b,sell)
+    t=record['trace'];stamp=record['time'];w,p,q=map(address,(record['owner'],record['first'],record['second']))
     if record['version'] not in (1,2) or t!=a['trace'] or (a['source'],a['destination'],b['destination'])!=(p,w,q) or any(x['time']!=stamp for x in (a,b,sell)):raise ValueError('cycle identity mismatch')
     obs=record['root_message']
     if obs['event_id']!=t or obs['in_progress'] is not False or obs['time']!=stamp:raise ValueError('event mismatch')
@@ -113,7 +117,8 @@ def overlay(h,store=None):
         buy,cycle=verify(r,h.traces[t],h.events.get(t,[]))
         h.events[t]=sorted(h.events[t]+[buy],key=lambda e:e['id'])
         # All token legs have now been classified, but the first quote is still unresolved.
-        h.unresolved[t]={'trace':t,'time':cycle['time'],'kind':'unresolved','transfer_count':0,'reasons':['missing_exact_buy_quote']}
+        if buy['quote_status']=='unresolved':h.unresolved[t]={'trace':t,'time':cycle['time'],'kind':'unresolved','transfer_count':0,'reasons':['missing_exact_buy_quote']}
+        else:h.unresolved.pop(t,None)
         verified.append(cycle)
     candidates=sum(bool(candidate_pairs(rows,h.events.get(t,[]))) for t,rows in h.traces.items())
     return {'verified_cycles':verified,'additional_candidate_cycles':candidates,'scope':'only evidence-backed cycles classified; remaining candidates are not proven trades'}
