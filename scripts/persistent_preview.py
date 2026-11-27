@@ -6,10 +6,12 @@ from recovery import load_seed, load_progress, read
 from incremental import load_history
 from preview import assemble
 from holder_state import evidence as holder_evidence
+from repair_overlay import overlay
 
 def bundle(store):
     seed=load_seed(store)
     h=load_history(store,seed)
+    repairs=overlay(store,seed,h)
     c=h.candidate()
     ids,cursor,counts=load_progress(store,seed)
     # Seed audit has its own identity; it must never be presented as an audit of the new candidate.
@@ -28,6 +30,7 @@ def bundle(store):
     out=assemble(c,a,holders,liquidity,lifecycle)
     ev=out['evidence'];ev.pop('digest')
     ev['seed_audit']=seed_audit
+    ev['repairs']=repairs
     ev['holder_status']=holder_status
     ev['history_head']=h.head
     ev['digest']=digest(ev)

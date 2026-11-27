@@ -1,0 +1,55 @@
+name: Install independently checked historical repairs
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/install-repairs.yml'
+permissions:
+  contents: write
+  actions: read
+concurrency:
+  group: jury-persistent-data
+  cancel-in-progress: false
+jobs:
+  install:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: source
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: data
+          path: store
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python3 -m unittest discover -s source/tests -v
+      - uses: actions/download-artifact@v4
+        with:
+          name: jury-alias-repair-proposals
+          run-id: 46023468514
+          github-token: ${{ github.token }}
+          path: proposals
+      - name: Validate and install exactly the checked proposals
+        run: |
+          python3 source/scripts/repair_overlay.py --store store --input proposals --expected-count 20
+          python3 source/scripts/persistent_preview.py --store store --out preview
+      - name: Commit repairs separately from immutable history
+        run: |
+          git -C store config user.name 'github-actions[bot]'
+          git -C store config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git -C store add repairs repair-status.json
+          if ! git -C store diff --cached --quiet; then
+            git -C store commit -m 'Install independently checked DeDust alias repair evidence'
+            git -C store push origin HEAD:data
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: corrected-unpublished-preview
+          path: preview/
+          include-hidden-files: true
+          if-no-files-found: error
