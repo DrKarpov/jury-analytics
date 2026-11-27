@@ -18,6 +18,10 @@ try:
             page.goto(f'http://127.0.0.1:{server.server_port}/')
             expect(page.locator('#status')).to_have_text('Не сверено',timeout=30000)
             expect(page.locator('#staging-badge')).to_be_visible()
+            if snapshot['evidence']['mode']=='public_beta':
+                expect(page.locator('#staging-badge')).to_contain_text('Бета-версия')
+                expect(page.locator('#notice')).to_contain_text('Предварительные данные')
+                expect(page.locator('#notice')).to_contain_text('История до')
             expect(page.locator('#audit-line')).to_contain_text('Сверка исходной истории')
             for i,n in enumerate(counts):
                 raw=page.locator('#metrics .metric').nth(i).inner_text()

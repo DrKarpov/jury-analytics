@@ -1,0 +1,70 @@
+name: Publish provisional JURY dashboard
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: ['Update and audit persistent history']
+    types: [completed]
+    branches: [main]
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/pages.yml'
+      - 'scripts/public_beta.py'
+      - 'docs/**'
+permissions:
+  contents: read
+concurrency:
+  group: jury-pages
+  cancel-in-progress: false
+jobs:
+  build:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: data
+          path: history
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate and build public beta
+        run: |
+          git -C history rev-parse HEAD
+          python3 -m unittest discover -s tests -v
+          node tests/analytics.test.mjs
+          node tests/wallets.test.mjs
+          node tests/integrity.test.mjs
+          node tests/cost-basis.test.mjs
+          python3 scripts/public_beta.py --store history --out site
+          node tests/check_public_beta.mjs site
+      - run: pip install playwright==1.51.0
+      - run: python -m playwright install --with-deps chromium
+      - run: python tests/persistent_browser_test.py site
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+  deploy:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/configure-pages@v5
+      - name: Deploy validated public beta
+        id: deployment
+        uses: actions/deploy-pages@v4

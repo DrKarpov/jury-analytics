@@ -1,0 +1,11 @@
+import {readFileSync,readdirSync} from 'node:fs';
+import assert from 'node:assert/strict';
+import {verifySnapshot} from '../docs/integrity.mjs';
+const dir=process.argv[2];
+const d=await verifySnapshot(JSON.parse(readFileSync(dir+'/snapshot.json','utf8')));
+assert.equal(d.evidence.mode,'public_beta');
+assert.equal(d.evidence.swap_audit.checked,0);
+assert.equal(d.evidence.swap_audit.status,'partial');
+assert.ok(d.evidence.seed_audit.attempted<=d.evidence.seed_audit.total_traces);
+assert.deepEqual(readdirSync(dir).sort(),['index.html','styles.css','telegram.svg','app.mjs','analytics.mjs','integrity.mjs','wallets.mjs','wallet-ui.mjs','cost-basis.mjs','snapshot.json'].sort());
+console.log('Public beta validated: no raw working data, secrets, or false audit claims in deployment artifact');
