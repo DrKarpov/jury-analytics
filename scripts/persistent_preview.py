@@ -5,6 +5,7 @@ from indexer import ROOT, digest, publish
 from recovery import load_seed, load_progress, read
 from incremental import load_history
 from preview import assemble
+from holder_state import evidence as holder_evidence
 
 def bundle(store):
     seed=load_seed(store)
@@ -23,9 +24,11 @@ def bundle(store):
     unavailable={'candidate_digest':d,'status':'not_checked_for_current_candidate'}
     liquidity=read(store/'seed'/'liquidity.json') if d==seed['digest'] else dict(unavailable)
     lifecycle=read(store/'seed'/'lifecycle.json') if d==seed['digest'] else dict(unavailable)
-    out=assemble(c,a,dict(unavailable),liquidity,lifecycle)
+    holders,holder_status=holder_evidence(store,d)
+    out=assemble(c,a,holders,liquidity,lifecycle)
     ev=out['evidence'];ev.pop('digest')
     ev['seed_audit']=seed_audit
+    ev['holder_status']=holder_status
     ev['history_head']=h.head
     ev['digest']=digest(ev)
     return out

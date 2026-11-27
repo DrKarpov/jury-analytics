@@ -20,7 +20,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: main
+          ref: ${{ github.sha }}
           path: source
           persist-credentials: false
       - uses: actions/checkout@v4
@@ -70,6 +70,22 @@ jobs:
           git -C store add -A
           if ! git -C store diff --cached --quiet; then
             git -C store commit -m 'Checkpoint incremental primary history'
+            git -C store push origin HEAD:data
+          fi
+      - name: Refresh independent holder observation
+        id: holders
+        if: ${{ !cancelled() && steps.incremental.outcome == 'success' }}
+        timeout-minutes: 2
+        env:
+          TONCENTER_API_KEY: ''
+          TONAPI_API_KEY: ${{ secrets.TONAPI_API_KEY }}
+        run: python3 -u source/scripts/holder_state.py --store store
+      - name: Persist holder observation and status
+        if: ${{ !cancelled() && steps.holders.outcome == 'success' }}
+        run: |
+          git -C store add holders
+          if ! git -C store diff --cached --quiet; then
+            git -C store commit -m 'Checkpoint independent holder observation'
             git -C store push origin HEAD:data
           fi
       - name: Audit next bounded batch
