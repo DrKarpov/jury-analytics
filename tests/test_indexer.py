@@ -18,6 +18,21 @@ def fixture(rows,acts):
 class Tests(unittest.TestCase):
     def setUp(self):self.db=open_db(':memory:')
     def tearDown(self):self.db.close()
+    def test_same_second_nonmonotonic_lt(self):
+        rows=[row(9,stamp=100),row(2,stamp=100),row(3,stamp=101)]
+        self.assertEqual(len(discover(fixture(rows,[]),0,101)),3)
+    def test_bisect_saturated_windows(self):
+        rows=[row(1,stamp=100),row(2,stamp=100),row(3,stamp=101),row(4,stamp=102)]
+        self.assertEqual([r['transaction_lt'] for r in transfer_windows(fixture(rows,[]),99,103,size=3)],['1','2','3','4'])
+    def test_saturated_second_fails_closed(self):
+        with self.assertRaisesRegex(ValueError,'saturated transfer window'):
+            list(transfer_windows(fixture([row(1),row(2)],[]),100,100,size=2))
+    def test_duplicate_transfer_rejected(self):
+        with self.assertRaisesRegex(ValueError,'duplicate transfer transaction'):
+            discover(fixture([row(1),row(1)],[]),0,101)
+    def test_timestamp_violation(self):
+        with self.assertRaisesRegex(ValueError,'timestamp order'):
+            discover(fixture([row(1,stamp=101),row(2,stamp=100)],[]),0,101)
     def test_buy(self):
         d=run(self.db,fixture([row(1)],[swap()]),cutoff=101);self.assertEqual(d['events'][0]['kind'],'buy');self.assertEqual(d['events'][0]['quote_raw'],'2000000000');self.assertEqual(d['unresolved'],[])
     def test_sell(self):

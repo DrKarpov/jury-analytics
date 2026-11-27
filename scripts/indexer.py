@@ -28,12 +28,34 @@ def paginated(fetch, endpoint, key, params, size=PAGE):
         offset+=len(batch)
         if len(batch)<size: break
 
+def transfer_windows(fetch,start,end,size=PAGE):
+    """Time-filtered Toncenter results sort by tx_now, not tx_lt.
+    Bisect a saturated time window instead of using offsets across equal timestamps.
+    Fail closed if one second alone saturates the page.
+    """
+    if start>end: return
+    batch=fetch('jetton/transfers',{'jetton_master':MASTER,'start_utime':start,'end_utime':end,'sort':'asc','limit':size,'offset':0})['jetton_transfers']
+    if not isinstance(batch,list) or len(batch)>size: raise ValueError('invalid transfer response page')
+    if len(batch)==size:
+        if start==end: raise ValueError(f'saturated transfer window at {start}; cannot prove completeness')
+        mid=(start+end)//2
+        yield from transfer_windows(fetch,start,mid,size)
+        yield from transfer_windows(fetch,mid+1,end,size)
+        return
+    previous=-1
+    for raw in batch:
+        stamp=int(raw['transaction_now'])
+        if not start<=stamp<=end: raise ValueError(f'transfer outside requested window: {stamp} not in [{start},{end}]')
+        if stamp<previous: raise ValueError(f'transfer timestamp order violation: {stamp} < {previous}')
+        previous=stamp
+        yield raw
+
 def discover(fetch,start,end):
-    rows={}; prev=-1
-    for raw in paginated(fetch,'jetton/transfers','jetton_transfers',{'jetton_master':MASTER,'start_utime':start,'end_utime':end,'sort':'asc'}):
+    rows={}
+    for raw in transfer_windows(fetch,start,end):
         r=normalized(raw); r['tx']=hash_id(r['tx']);r['trace']=hash_id(r['trace'])
-        if not start<=r['time']<=end or int(r['lt'])<prev or r['tx'] in rows: raise ValueError('transfer order, duplicate or range violation')
-        prev=int(r['lt']); rows[r['tx']]=(r,raw)
+        if r['tx'] in rows: raise ValueError(f'duplicate transfer transaction: {r["tx"]}')
+        rows[r['tx']]=(r,raw)
     return rows
 
 def fetch_actions(fetch, ids):
