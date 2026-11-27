@@ -16,7 +16,7 @@ concurrency:
 jobs:
   recover-audit:
     runs-on: ubuntu-24.04
-    timeout-minutes: 14
+    timeout-minutes: 19
     steps:
       - uses: actions/checkout@v4
         with:
@@ -103,5 +103,24 @@ jobs:
           git -C store add -A
           if ! git -C store diff --cached --quiet; then
             git -C store commit -m 'Checkpoint independent trace audit'
+            git -C store push origin HEAD:data
+          fi
+      - name: Automatically reconcile known historical discrepancy pattern
+        id: repair
+        if: ${{ !cancelled() && steps.audit.outcome == 'success' }}
+        timeout-minutes: 4
+        env:
+          TONCENTER_API_KEY: ''
+          TONAPI_API_KEY: ${{ secrets.TONAPI_API_KEY }}
+        run: python3 -u source/scripts/auto_repair.py --store store --limit 40 --seconds 100
+      - name: Persist validated repairs and remaining review queue
+        if: ${{ !cancelled() && steps.repair.outcome == 'success' }}
+        run: |
+          git -C store add repair-status.json repair-queue.json
+          for dir in repairs repair-attempts; do
+            if test -n "$(find "store/$dir" -type f -name '*.json' -print -quit)"; then git -C store add "$dir"; fi
+          done
+          if ! git -C store diff --cached --quiet; then
+            git -C store commit -m 'Checkpoint automatic repairs and remaining discrepancy queue'
             git -C store push origin HEAD:data
           fi
