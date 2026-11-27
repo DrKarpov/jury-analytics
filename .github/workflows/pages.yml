@@ -76,15 +76,27 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Reject superseded release artifacts
+      - name: Check whether validated artifact is still current
+        id: freshness
         env:
           GH_TOKEN: ${{ github.token }}
           SOURCE_SHA: ${{ needs.build.outputs.source }}
           DATA_SHA: ${{ needs.build.outputs.data }}
         run: |
-          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)" = "$SOURCE_SHA"
-          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/data" --jq .object.sha)" = "$DATA_SHA"
+          set -euo pipefail
+          source_now=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)
+          data_now=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/data" --jq .object.sha)
+          if [[ "$source_now" != "$SOURCE_SHA" || "$data_now" != "$DATA_SHA" ]]; then
+            echo "current=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Validated artifact superseded by a newer source or data checkpoint; deployment intentionally skipped."
+            echo "### Deployment skipped: newer checkpoint available" >> "$GITHUB_STEP_SUMMARY"
+            echo "No artifact was published. A subsequent source push or completed data workflow triggers a fresh build." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "current=true" >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/configure-pages@v5
+        if: steps.freshness.outputs.current == 'true'
       - name: Deploy validated public beta
+        if: steps.freshness.outputs.current == 'true'
         id: deployment
         uses: actions/deploy-pages@v4
