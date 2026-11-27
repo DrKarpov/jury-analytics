@@ -1,0 +1,46 @@
+name: Triage unresolved JURY operations
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/unresolved-triage.yml'
+permissions:
+  contents: write
+concurrency:
+  group: jury-persistent-data
+  cancel-in-progress: false
+jobs:
+  triage:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: source
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: data
+          path: store
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python3 -m unittest discover -s source/tests -v
+      - name: Profile bounded batch and inspect representative raw traces
+        env:
+          TONCENTER_API_KEY: ''
+          TONAPI_API_KEY: ${{ secrets.TONAPI_API_KEY }}
+        run: python3 -u source/scripts/unresolved_triage.py --store store
+      - name: Persist diagnostic checkpoints only
+        run: |
+          git -C store config user.name 'github-actions[bot]'
+          git -C store config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git -C store add triage-status.json
+          for dir in triage triage-raw; do
+            if test -n "$(find "store/$dir" -type f -name '*.json' -print -quit)"; then git -C store add "$dir"; fi
+          done
+          if ! git -C store diff --cached --quiet; then
+            git -C store commit -m 'Checkpoint unresolved action profiles and protocol samples'
+            git -C store push origin HEAD:data
+          fi
