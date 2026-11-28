@@ -1,0 +1,42 @@
+name: Cross-check current JURY wallet identity
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/wallet_identity.py'
+      - 'tests/test_wallet_identity.py'
+      - '.github/workflows/wallet-identity.yml'
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: source
+      - uses: actions/checkout@v4
+        with:
+          ref: data
+          path: store
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate wallet identity checks
+        run: python3 -m unittest discover -s source/tests -p test_wallet_identity.py -v
+      - name: Bounded read-only current getter cross-check
+        env:
+          TONCENTER_API_KEY: ${{ secrets.TONCENTER_API_KEY }}
+          TONAPI_API_KEY: ${{ secrets.TONAPI_API_KEY }}
+        run: |
+          mkdir -p report
+          git -C store rev-parse HEAD > report/data-ref.txt
+          git -C source rev-parse HEAD > report/source-ref.txt
+          python3 -u source/scripts/wallet_identity.py --store store --out report/identity.json --limit 12
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wallet-identity-diagnostic
+          path: report/
