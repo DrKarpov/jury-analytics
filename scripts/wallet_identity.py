@@ -7,7 +7,7 @@ from genesis_checkpoint import ANCHOR,validate_master,validate_receipt,signed
 from indexer import TOKEN,hash_id,publish
 from provider import address,request,tonapi_request,paired
 from recovery import read
-from wallet_stateinit import boc,require,prefix,stateinit_parts
+from wallet_stateinit import boc,require,prefix,stateinit_parts,inspect_record
 
 def stack(response,n):
     require(response.get('success') is True and response.get('exit_code')==0,'getter not successful')
@@ -47,7 +47,7 @@ def candidates(store):
         r=read(path);q=validate_receipt(r,messages[path.stem],m['digest'])
         if int(q['recipient_at'])>ANCHOR:continue
         tx=r['raw']['center']['transactions'][0];raw=r['raw']['alternate']
-        info={'message':q['message'],'tx':q['recipient_tx'],'historical_code':None,'prefix_owner_candidate':None,'canonical_hash_matches_wallet':None,'stateinit_error':None}
+        info={'message':q['message'],'tx':q['recipient_tx'],'historical_code':None,'prefix_owner_candidate':None,'canonical_hash_matches_wallet':None,'deployment_address_match':False,'stateinit_error':None}
         try:
             info['historical_code']=hash_id(tx['account_state_after']['code_hash'])
             a=tx['in_msg']['init_state'];b=raw['in_msg']['init']
@@ -57,6 +57,8 @@ def candidates(store):
             owner,master,_=prefix(d)
             require(master==TOKEN,'prefix master mismatch')
             info.update(prefix_owner_candidate=owner,canonical_hash_matches_wallet=h==q['wallet'].split(':',1)[1],stateinit_code=c,derived_hash=h)
+            historical=inspect_record(r,q)
+            info.update(deployment_address_match=True,fixed_prefix_length=historical['fixed_prefix_length'],deployment_stateinit_hash=historical['stateinit_hash'])
         except (ValueError,KeyError,TypeError,AttributeError,IndexError) as e:info['stateinit_error']=str(e)
         out[q['wallet']].append(info)
     return m['digest'],out
@@ -90,6 +92,7 @@ def run(store,out,center=request,alternate=tonapi_request,limit=12,seconds=110):
     summary={'anchor':ANCHOR,'master_digest':md,'candidate_wallets':len(cs),'receipt_rows':sum(map(len,cs.values())),
              'receipts_with_decoded_prefix':sum(x['prefix_owner_candidate'] is not None for xs in cs.values() for x in xs),
              'receipts_with_canonical_address_match':sum(x['canonical_hash_matches_wallet'] is True for xs in cs.values() for x in xs),
+             'receipts_with_valid_deployment_stateinit':sum(x['deployment_address_match'] for xs in cs.values() for x in xs),
              'sample_limit':limit,'attempted':attempted,'current_identity_matches':len(records),'failed':len(failures),
              'failure_reasons':dict(Counter(x['reason'] for x in failures)),'stop_reason':stop,'observed_from':started,'observed_to':int(time.time()),
              'scope':'current getter and indexed identity agreement for bounded sample; historical code/prefix overlap diagnostic only; no historical owner binding or balance proof'}

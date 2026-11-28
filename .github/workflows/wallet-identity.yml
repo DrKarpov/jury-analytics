@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'scripts/wallet_identity.py'
+      - 'scripts/wallet_stateinit.py'
       - 'tests/test_wallet_identity.py'
       - '.github/workflows/wallet-identity.yml'
 permissions:
