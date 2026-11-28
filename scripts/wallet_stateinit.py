@@ -60,11 +60,22 @@ def boc(raw):
         c['hash']=hashlib.sha256(c['repr']+b''.join(x['depth'].to_bytes(2,'big') for x in children)+b''.join(x['hash'] for x in children)).digest()
     return cells,root
 
-def decode_stateinit(raw):
+def stateinit_parts(raw,*,center=False):
     cells,i=boc(raw);root=cells[i]
-    require(root['bits']=='00110' and len(root['refs'])==2,'unsupported StateInit structure')
+    # Saved Toncenter init_state.body has an extra five-bit prefix on
+    # this observed encoding. Do not strip arbitrary bits or accept
+    # unknown layouts. TonAPI supplies the bare StateInit.
+    allowed=('00110','1010000110') if center else ('00110',)
+    require(root['bits'] in allowed and len(root['refs'])==2,'unsupported StateInit structure')
     code,data=(cells[j] for j in root['refs'])
-    return root['hash'].hex(),code['hash'].hex(),data
+    # Ordinary canonical 00110 bits (top-up byte 0x34), code and data
+    # references in order. Compute the address from canonical StateInit,
+    # independently of the provider wrapper's representation hash.
+    h=hashlib.sha256(bytes.fromhex('020134')+code['depth'].to_bytes(2,'big')+data['depth'].to_bytes(2,'big')+code['hash']+data['hash']).hexdigest()
+    return h,code['hash'].hex(),data,root['hash'].hex()
+
+def decode_stateinit(raw):
+    return stateinit_parts(raw)[:3]
 
 def prefix(data):
     # Observed JURY initial-data prefix: zero VarUInteger16, std owner, std master.
@@ -81,15 +92,15 @@ def inspect_record(record,proof):
     cm=c['in_msg'];am=a['in_msg']
     ci=cm.get('init_state');ai=am.get('init')
     require(isinstance(ci,dict) and ci.get('body') and isinstance(ai,dict) and ai.get('boc'),'missing dual StateInit')
-    ch,cc,cd=decode_stateinit(base64.b64decode(ci['body'],validate=True))
+    ch,cc,cd,wrapper=stateinit_parts(base64.b64decode(ci['body'],validate=True),center=True)
     ah,ac,ad=decode_stateinit(bytes.fromhex(ai['boc']))
     require((ch,cc,cd['hash'])==(ah,ac,ad['hash']),'provider StateInit mismatch')
-    if ci.get('hash'):require(hash_id(ci['hash'])==ch,'provider declared StateInit hash mismatch')
+    require(ci.get('hash') and hash_id(ci['hash'])==wrapper,'provider declared StateInit hash mismatch')
     require(ch==proof['wallet'].split(':',1)[1],'StateInit does not derive recipient address')
     require(cc==hash_id(c['account_state_after']['code_hash']),'historical code differs from StateInit')
     owner,master,tail=prefix(cd)
     require(master==TOKEN,'initial data master differs from JURY')
-    return {'wallet':proof['wallet'],'owner_candidate':owner,'master_candidate':master,'stateinit_hash':ch,'code_hash':cc,'data_hash':cd['hash'].hex(),'uninterpreted_suffix_bits':len(tail),'uninterpreted_suffix':tail,'data_refs':len(cd['refs']),'message':proof['message'],'recipient_tx':proof['recipient_tx']}
+    return {'wallet':proof['wallet'],'owner_candidate':owner,'master_candidate':master,'stateinit_hash':ch,'center_serialization_hash':wrapper,'code_hash':cc,'data_hash':cd['hash'].hex(),'uninterpreted_suffix_bits':len(tail),'uninterpreted_suffix':tail,'data_refs':len(cd['refs']),'message':proof['message'],'recipient_tx':proof['recipient_tx']}
 
 def run(store,out):
     g=store/'genesis'/'v1';master=read(g/'master.json');messages=validate_master(master)
