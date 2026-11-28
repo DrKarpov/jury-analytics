@@ -48,7 +48,7 @@ def capture_receipt(center,alternate,msg,master_digest):
     def a(e,p):
         raw['alternate']=alternate(e,p);return raw['alternate']
     core={k:msg[k] for k in ('message','wallet','amount_raw')}
-    proof=receipt(c,a,core)
+    proof=receipt(c,a,core,parallel=True)
     if integer(proof['recipient_lt'])<=msg['master_lt'] or integer(proof['recipient_at'])<msg['master_at']:
         raise ValueError('recipient precedes master')
     return signed({'version':1,'master_digest':master_digest,'message':msg,'proof':proof,'raw':raw})

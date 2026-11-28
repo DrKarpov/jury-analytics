@@ -6,6 +6,9 @@ on:
     paths:
       - '.github/workflows/genesis.yml'
       - 'scripts/wallet_history.py'
+      - 'scripts/genesis_checkpoint.py'
+      - 'scripts/master_history.py'
+      - 'scripts/provider.py'
       - 'scripts/wallet_reconcile.py'
   schedule:
     - cron: '12 * * * *'
@@ -18,7 +21,7 @@ jobs:
   genesis:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
-    timeout-minutes: 42
+    timeout-minutes: 18
     steps:
       - uses: actions/checkout@v4
         with:
@@ -34,6 +37,7 @@ jobs:
       - name: Validate genesis and wallet reconciliation code
         run: |
           python3 -m unittest discover -s source/tests -p test_genesis_checkpoint.py -v
+          python3 -m unittest discover -s source/tests -p test_paired_provider.py -v
           python3 -m unittest discover -s source/tests -p 'test_wallet*.py' -v
       - name: Recover pinned master chain
         timeout-minutes: 5
@@ -43,29 +47,20 @@ jobs:
         run: |
           python3 -u source/scripts/genesis_checkpoint.py master --store store --seconds 240
           bash source/scripts/checkpoint.sh store 'Checkpoint pinned JURY master chain' genesis/v1/master.json
-      - name: Refresh primary discovery before historical backfill
-        timeout-minutes: 6
-        continue-on-error: true
-        env:
-          TONCENTER_API_KEY: ${{ secrets.TONCENTER_API_KEY }}
-        run: |
-          python3 -u source/scripts/incremental.py --store store --max-windows 3
-          bash source/scripts/checkpoint.sh store 'Checkpoint primary history before genesis backfill' ':(glob)updates/batch-*.json' update-status.json
       - name: Continue genesis and linked wallet history in checkpointed rounds
-        timeout-minutes: 26
+        timeout-minutes: 8
         env:
           TONCENTER_API_KEY: ${{ secrets.TONCENTER_API_KEY }}
           TONAPI_API_KEY: ${{ secrets.TONAPI_API_KEY }}
           EVENT_NAME: ${{ github.event_name }}
         run: |
           set -euo pipefail
-          rounds=3
-          if [[ "$EVENT_NAME" == schedule ]]; then rounds=1; fi
+          rounds=1
           for ((i=1; i<=rounds; i++)); do
             echo "Historical backfill round $i/$rounds"
-            python3 -u source/scripts/genesis_checkpoint.py receipts --store store --seconds 200 --limit 100
+            python3 -u source/scripts/genesis_checkpoint.py receipts --store store --seconds 180 --limit 100
             bash source/scripts/checkpoint.sh store 'Checkpoint genesis delivery receipts' ':(glob)genesis/v1/receipts/*.json' genesis/v1/pending.json genesis/v1/status.json
-            python3 -u source/scripts/wallet_history.py --store store --pages 60 --size 100 --seconds 200
+            python3 -u source/scripts/wallet_history.py --store store --pages 100 --size 100 --seconds 240
             bash source/scripts/checkpoint.sh store 'Checkpoint linked JURY wallet history' ':(glob)genesis/v1/wallet-history/accounts/**/*.json' genesis/v1/wallet-history/pending.json genesis/v1/wallet-history/status.json
             python3 -u source/scripts/wallet_reconcile.py --store store
             bash source/scripts/checkpoint.sh store 'Checkpoint wallet delivery reconciliation' genesis/v1/wallet-history/reconciliation.json
@@ -88,5 +83,5 @@ jobs:
         env:
           TONAPI_API_KEY: ${{ secrets.TONAPI_API_KEY }}
         run: |
-          python3 -u source/scripts/current_audit.py --store store --limit 100 --seconds 140
+          python3 -u source/scripts/current_audit.py --store store --limit 100 --seconds 90
           bash source/scripts/checkpoint.sh store 'Checkpoint current trace audit' ':(glob)current-audit/v1/batch-*.json'

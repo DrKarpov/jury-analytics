@@ -5,7 +5,7 @@ from functools import partial
 from pathlib import Path
 from genesis_checkpoint import ANCHOR,checked,signed,validate_master,validate_receipt
 from indexer import TOKEN,hash_id,integer,publish
-from provider import address,request,tonapi_request
+from provider import address,request,tonapi_request,paired
 from recovery import read
 
 INTERNAL='0x178d4519'
@@ -79,10 +79,10 @@ def check_rows(rows,prior,tip):
     return prev_lt,prev_tx,state
 
 def fetch_page(center,alternate,wallet,tip,prior,size):
-    c=center('transactions',{'account':wallet,'sort':'asc','limit':size,'start_lt':prior[0]+1,'end_lt':tip['lt']})['transactions']
     p={'sort_order':'asc','limit':size,'before_lt':tip['lt']+1}
     if prior[0]:p['after_lt']=prior[0]
-    a=alternate(f'blockchain/accounts/{wallet}/transactions',p)['transactions']
+    c,a=paired(lambda:center('transactions',{'account':wallet,'sort':'asc','limit':size,'start_lt':prior[0]+1,'end_lt':tip['lt']})['transactions'],
+               lambda:alternate(f'blockchain/accounts/{wallet}/transactions',p)['transactions'])
     if not c or len(c)!=len(a) or len(c)>size:raise ValueError('wallet page missing or unequal')
     rows=[compare(x,y,wallet) for x,y in zip(c,a,strict=True)]
     check_rows(rows,prior,tip)

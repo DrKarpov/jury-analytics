@@ -16,7 +16,7 @@ class GenesisCheckpointTests(unittest.TestCase):
     def test_receipt_replay_and_wrong_master(self):
         m=self.master();msg=next(iter(validate_master(m).values()));core={k:msg[k] for k in ('message','wallet','amount_raw')}
         proof={**core,'recipient_tx':H('recipient'),'recipient_lt':str(DEPLOYMENT_LT+1),'recipient_at':ANCHOR-99}
-        def replay(c,a,msg):
+        def replay(c,a,msg,**kwargs):
             self.assertEqual(c('x',{}),{'primary':1});self.assertEqual(a('y',{}),{'alternate':2})
             return proof
         with patch('genesis_checkpoint.receipt',side_effect=replay):

@@ -8,7 +8,7 @@ import time
 
 from incremental import load_history
 from indexer import MASTER, TOKEN, digest, hash_id, integer, publish
-from provider import address, request, tonapi_request
+from provider import address, request, tonapi_request, paired
 from recovery import read
 
 
@@ -98,16 +98,23 @@ def scan(center, alternate, cutoff=None, size=100):
     return rows
 
 
-def receipt(center, alternate, message):
+def receipt(center, alternate, message, *, parallel=False):
     key = message['message']
     encoded = base64.b64encode(bytes.fromhex(key)).decode('ascii')
-    matches = center('transactionsByMessage', {
+    primary_call = lambda: center('transactionsByMessage', {
         'msg_hash': encoded, 'direction': 'in', 'limit': 2
     })['transactions']
+    alternate_call = lambda: alternate(f'blockchain/messages/{key}/transaction', {})
+    if parallel:
+        matches, other = paired(primary_call, alternate_call)
+    else:
+        matches = primary_call()
+        other = None
     if len(matches) != 1:
         raise ValueError('recipient transaction lacks a unique match')
     primary = matches[0]
-    other = alternate(f'blockchain/messages/{key}/transaction', {})
+    if not parallel:
+        other = alternate_call()
     pm, am = primary['in_msg'], other['in_msg']
     tx = hash_id(primary['hash'])
     if (tx != hash_id(other['hash']) or integer(primary['lt']) != integer(other['lt'])

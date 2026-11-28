@@ -3,6 +3,7 @@ import json, os, time, base64, random, urllib.error, urllib.request, urllib.pars
 from email.utils import parsedate_to_datetime
 from http.client import IncompleteRead
 from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor
 BASE='https://toncenter.com/api/v3'
 MASTER='Ef-_fgHqEczCswLpnBEoIvgyruJUvn_QDt5QRjecY8w3lr2i'
 ROOT=Path(__file__).resolve().parents[1]
@@ -52,6 +53,17 @@ def fetch_json(url, headers, attempts, timeout, deadline):
         else:
             time.sleep(min(1.1, max(0, deadline - time.monotonic())))
             return payload
+
+
+def paired(primary, alternate):
+    """Overlap different providers, never multiple requests to either provider.
+    Both results or an exception; no partial proof is returned.
+    The callers retain each provider's existing rate and deadline controls.
+    """
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        first=executor.submit(primary)
+        second=executor.submit(alternate)
+        return first.result(),second.result()
 
 
 def request(endpoint, params, *, deadline=None):

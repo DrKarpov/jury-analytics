@@ -1,5 +1,7 @@
 # Project context — JURY Analytics
 
+**Current agent entry point:** [AGENTS.md](AGENTS.md), [ROADMAP.md](ROADMAP.md), [PROGRESS.md](PROGRESS.md). Read these before historical notes. Verify actual main/data refs and Actions before editing.
+
 Current mode: public beta on GitHub Pages. See [release status](ROADMAP.md) for the measured baseline, pinned source/data SHAs and open gates. See [the runbook](RUNBOOK.md) for current pipeline and reproducible artifact checks.
 
 ## Historical staging notes
