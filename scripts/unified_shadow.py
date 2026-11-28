@@ -8,7 +8,7 @@ from collections import Counter
 from functools import partial
 from pathlib import Path
 from canonical_movements import Observations
-from delivery_journal import build as build_journal,compact as compact_journal,preserve as preserve_journal
+from delivery_journal import build as build_journal,compact as compact_journal,preserve as preserve_journal,repair_plan
 from continuation_shadow import capture,require
 from continuation_store import cursor,apply,load,next_target
 from counterpart_discovery import validate,record_key
@@ -155,7 +155,14 @@ def run(store,center=request,alternate=tonapi_request,limit=6,seconds=40):
                           'historical':compact_journal(historical_journal),'combined':compact_journal(journal),
                           'historical_postings_preserved':True,'duplicate_reverse_replay_equal':True,
                           'scope':'shadow delivery journal; no verified balances, supply, trade labels or PnL'})
+    plan=repair_plan(journal,obs,ANCHOR,states,cursors,restored,proofs)
+    require(len(plan['tasks'])==len(journal['unresolved']),'ledger repair census mismatch')
+    repair_record=signed({'version':1,'anchor':ANCHOR,'master_digest':md,'target_timestamp':target,
+                          'ledger_digest':ledger_record['digest'],**plan})
+    publish(repair_record,folder/'ledger-repair.json')
     publish(ledger_record,folder/'ledger-status.json')
+    print('LEDGER REPAIR',json.dumps({'routes':plan['route_counts'],'negative_accounts':len(plan['negative_net_accounts']),
+          'negative_accounts_without_local_unresolved':plan['negative_accounts_without_local_unresolved']},sort_keys=True),flush=True)
     print('DELIVERY JOURNAL',json.dumps(ledger_record,sort_keys=True),flush=True)
     edges=frontier(obs,all_roots)
     observed_accounts={w for w,_ in obs.rows.values()}
@@ -180,7 +187,7 @@ def run(store,center=request,alternate=tonapi_request,limit=6,seconds=40):
              'master_new_roots':len(master_roots-roots),'master_roots_without_rows':len(new_root_without_rows),
              'master_receipts_after_target':pending_after_target,'unified_frontier_edges':len(edges),
              'unified_frontier_peers':len({e['peer'] for e in edges}),
-             'frontier_digest':peer_record['digest'],'projection_digest':digest(after),'ledger_digest':ledger_record['digest'],
+             'frontier_digest':peer_record['digest'],'projection_digest':digest(after),'ledger_digest':ledger_record['digest'],'ledger_repair_digest':repair_record['digest'],
              'cold_replay_equal':True,'stop_reason':stop,
              'scope':'unified shadow replay of compared account prefixes and master discovery roots; no isolated counterpart rows, common block completeness, historical owner continuity, balance or trade proof'}
     publish(signed({**summary,'included_wallets':included,'master_roots_without_rows_addresses':sorted(new_root_without_rows)}),folder/'unified-status.json')

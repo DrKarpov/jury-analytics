@@ -21,7 +21,7 @@ STAGES=(
     ('master','master_continuation.py',('--seconds','55'),80,
      'master/status.json',('master',),('pending_receipts',)),
     ('unified','unified_shadow.py',('--limit','6','--seconds','40'),65,
-     'unified-status.json',('peer-accounts','unified-status.json','unified-frontier.json','unified-pending.json','ledger-status.json'),('peer_pending_failures','master_roots_without_rows')),
+     'unified-status.json',('peer-accounts','unified-status.json','unified-frontier.json','unified-pending.json','ledger-status.json','ledger-repair.json'),('peer_pending_failures','master_roots_without_rows')),
 )
 
 def require(ok,message):
@@ -88,6 +88,12 @@ def execute(store,report,runner=subprocess.run):
                         and ledger['combined']['projection_digest']==status['projection_digest']
                         and ledger['duplicate_reverse_replay_equal'] and ledger['historical_postings_preserved'],
                         'unified ledger dependency mismatch')
+                repair=checked(read(folder/'ledger-repair.json'))
+                require(repair['master_digest']==md and repair['target_timestamp']==target
+                        and repair['digest']==status['ledger_repair_digest']
+                        and repair['ledger_digest']==ledger['digest']
+                        and len(repair['tasks'])==sum(ledger['combined']['unresolved_counts'].values()),
+                        'ledger repair dependency mismatch')
             reasons=classify(name,status,failures)
             runner(['bash',str(HERE/'checkpoint.sh'),str(store),'Checkpoint shadow pipeline: '+name,
                     *['continuation/v1/'+x for x in paths]],check=True,timeout=35)

@@ -60,7 +60,7 @@ def next_target(current,target):
     if not current['tip_reached']:return current['target']
     return target if target>current['target'] else None
 
-def select_accounts(eligible,states,cursors,failures,target,now,limit):
+def select_accounts(eligible,states,cursors,failures,target,now,limit,weights=None):
     # Separate discovery from refresh: a growing historical frontier must
     # never monopolize every slot while already-observed wallets become stale.
     def priority(w):
@@ -70,18 +70,25 @@ def select_accounts(eligible,states,cursors,failures,target,now,limit):
                 -sum(x['time']>=ANCHOR-86400 for x in states[w]['rows']),w)
     todo=sorted((w for w in eligible if (w not in cursors or next_target(cursors[w],target) is not None)
                  and now-failures.get(w,{}).get('at',0)>=600),key=priority)
+    # Reserve at most half the slots for actual missing counterpart chains.
+    weights=weights or {}
+    focused=sorted((w for w in todo if weights.get(w,0)>0),
+                   key=lambda w:(priority(w)[0],-weights[w],priority(w)[1],w))[:limit//2]
+    todo=[w for w in todo if w not in focused]
+    limit-=len(focused)
+    if not limit:return focused
     refresh=[w for w in todo if w in cursors]
     discovery=[w for w in todo if w not in cursors]
     # For a one-slot budget alternate by total successfully stored envelopes.
     if limit==1:
         first,second=(discovery,refresh) if sum(c['pages'] for c in cursors.values())%2==0 else (refresh,discovery)
-        return (first or second)[:1]
+        return focused+(first or second)[:1]
     selected=[]
     for i in range(max(len(refresh),len(discovery))):
         if i<len(refresh):selected.append(refresh[i])
         if i<len(discovery):selected.append(discovery[i])
         if len(selected)>=limit:break
-    return selected[:limit]
+    return focused+selected[:limit]
 
 def post_anchor_frontier(states,cursors,roots):
     # The graph is the same verifier used by the canonical projection.
@@ -133,7 +140,11 @@ def run(store,center=request,alternate=tonapi_request,limit=12,seconds=90):
     failures=dict(old['failures']);require(set(failures)<=eligible,'orphan continuation failure')
     now=int(time.time())
     def get(w):return cursors[w] if w in cursors else cursor(states[w])
-    todo=select_accounts(eligible,states,cursors,failures,target,now,limit)
+    current_frontier=post_anchor_frontier(states,cursors,roots)
+    weights=Counter(e['peer'] for e in current_frontier['edges'] if e['peer'] in eligible)
+    todo=select_accounts(eligible,states,cursors,failures,target,now,limit,weights)
+    focused_selected=sum(bool(weights.get(w)) for w in todo)
+    prior_frontier={(e['side'],e['message']) for e in current_frontier['edges']}
     previous_envelopes=sum(c['pages'] for c in cursors.values())
     previously_observed=set(cursors)
     previous_projection=Observations()
@@ -173,6 +184,7 @@ def run(store,center=request,alternate=tonapi_request,limit=12,seconds=90):
     require(all(new_events.get(k)==v for k,v in old_events.items()),'historical movement changed')
     require(all(new_events.get(k)==v for k,v in previous_events.items()),'previous continuation movement changed')
     frontier=post_anchor_frontier(states,restored,roots)
+    next_frontier={(e['side'],e['message']) for e in frontier['edges']}
     folder.mkdir(parents=True,exist_ok=True)
     publish(signed({'anchor':ANCHOR,'master_digest':md,'failures':failures}),pending)
     frontier_record=signed({'version':1,'anchor':ANCHOR,'master_digest':md,'target_timestamp':target,
@@ -186,6 +198,8 @@ def run(store,center=request,alternate=tonapi_request,limit=12,seconds=90):
         'total_envelopes':sum(c['pages'] for c in restored.values()),
         'total_new_rows':sum(len(c['new_rows']) for c in restored.values()),
         'attempted_this_run':attempted,'envelopes_this_run':written,'new_rows_this_run':new_count,
+        'frontier_priority_candidate_accounts':len(weights),'selected_accounts_with_frontier_messages':focused_selected,
+        'prior_frontier_edges_closed':len(prior_frontier-next_frontier),'new_frontier_edges':len(next_frontier-prior_frontier),
         'replayed_previous_envelopes':previous_envelopes,'resumed_accounts_this_run':resumed,
         'resumed_rows_this_run':resumed_rows,'new_accounts_this_run':written-resumed,
         'oldest_account_completed_target':min((c['target'] if c['tip_reached'] else ANCHOR for c in restored.values()),default=ANCHOR),

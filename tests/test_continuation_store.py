@@ -65,3 +65,11 @@ class PersistentContinuationTests(unittest.TestCase):
         states[b]={'rows':[],'complete':True}
         f=post_anchor_frontier(states,{a:{'new_rows':[s]},b:{'new_rows':[r]}},{a})
         self.assertEqual(f['edges'],[])
+
+    def test_frontier_priority_reserves_only_half_and_honors_backoff(self):
+        target=ANCHOR+1000
+        states={w:{'rows':[{'time':ANCHOR}]} for w in ('old','hot','hot2','new','blocked')}
+        cursors={'old':{'target':ANCHOR+1,'tip_reached':True,'last_observed_at':1,'pages':1}}
+        weights={'hot':10,'hot2':9,'blocked':100}
+        self.assertEqual(select_accounts(set(states),states,cursors,{'blocked':{'at':1000}},target,1200,4,weights),
+                         ['hot','hot2','old','new'])

@@ -2,7 +2,7 @@ import sys,unittest
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'scripts'))
 from canonical_movements import Observations
-from delivery_journal import build,preserve,signed_delta
+from delivery_journal import build,preserve,signed_delta,repair_plan
 from genesis_checkpoint import ANCHOR
 from indexer import TOKEN,integer
 A='0:'+'a'*64
@@ -62,3 +62,19 @@ class DeliveryJournalTests(unittest.TestCase):
         self.assertEqual(x['wallet_net_raw'],{A:'-30',B:'30'})
         self.assertEqual(x['negative_running_minima_raw'],{A:'-30'})
         self.assertEqual(x['accounted_wallet_net_raw'],'0')
+
+    def test_repair_plan_routes_without_posting(self):
+        s={**S,'time':ANCHOR+1}
+        o=obs([(A,R),(A,s)])
+        result=build(o,{A},E,P,ANCHOR+1)
+        before=result['journal']
+        plan=repair_plan(result,o,ANCHOR,{B:{'complete':True,'rows':[T]}},{},{},{})
+        self.assertEqual(plan['route_counts'],{'start_regular_cursor':1})
+        self.assertEqual(plan['tasks'][0]['peer'],B)
+        self.assertEqual(plan['tasks'][0]['message'],N['hash'])
+        self.assertEqual(result['journal'],before)
+        plan=repair_plan(result,o,ANCHOR,{}, {}, {}, {})
+        self.assertEqual(plan['route_counts'],{'capture_exact_counterpart':1})
+        historic=build(obs([(A,R),(A,S)]),{A},E,P,ANCHOR)
+        self.assertEqual(repair_plan(historic,obs([(A,R),(A,S)]),ANCHOR,{}, {}, {}, {})['route_counts'],
+                         {'historical_message_closure':1})

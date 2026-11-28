@@ -120,3 +120,59 @@ def compact(result):
 def preserve(old,new):
     current={e['id']:e for e in new['journal']}
     require(all(current.get(e['id'])==e for e in old['journal']),'unified journal changed historical posting')
+
+def repair_plan(result,obs,anchor,states,regular,peer,proofs):
+    """Route unresolved evidence without interpreting it as a balance change."""
+    isolated={(x['edge']['side'],x['edge']['message']):x for x in proofs.values()}
+    tasks=[];wallets=defaultdict(list)
+    negative=result['negative_running_minima_raw']
+    for g in result['unresolved']:
+        task=dict(g);w=g.get('wallet');tx=g.get('tx')
+        if w in negative:task['negative_running_net_wallet']=True
+        if g['kind'] in ('unpaired_internal_incoming','unpaired_internal_outgoing'):
+            account,row=obs.rows[tx]
+            require(account==w,'repair task wallet mismatch')
+            side=g['side'];mid=g['message']
+            messages=[row['in']] if side=='incoming' else row['out']
+            matches=[m for m in messages if m and m['hash']==mid]
+            require(len(matches)==1,'repair task message not unique')
+            m=matches[0];other=m['source' if side=='incoming' else 'destination']
+            require(valid_internal(m,w,'destination' if side=='incoming' else 'source'),'invalid repair task message')
+            task.update(peer=other,lt=str(row['lt']),time=row['time'])
+            captured=isolated.get((side,mid))
+            if captured:
+                require(captured['edge']['peer']==other and captured['edge']['transaction']==tx,'repair counterpart identity mismatch')
+                task['counterpart_digest']=captured['digest']
+                task['counterpart_tx']=captured['counterpart']['tx']
+            if captured and captured['counterpart']['tx'] in obs.rows:
+                task['route']='inspect_observed_counterpart_conflict'
+            elif row['time']<=anchor:
+                task['route']='historical_message_closure'
+            elif other in peer:
+                task['route']='refresh_peer_prefix'
+            elif states.get(other,{}).get('complete') and states[other]['rows']:
+                task['route']='refresh_regular_cursor' if other in regular else 'start_regular_cursor'
+            elif captured:
+                task['route']='acquire_counterpart_prefix'
+            else:
+                task['route']='capture_exact_counterpart'
+        elif g['kind']=='master_delivery_unposted':
+            task['route']='resolve_master_receipt_or_prefix'
+        else:
+            task['route']='inspect_raw_execution_and_state'
+        tasks.append(task)
+        if w:wallets[w].append(task)
+    tasks.sort(key=lambda x:(x['kind'],x['id']))
+    accounts=[]
+    for w,minimum in sorted(negative.items()):
+        related=wallets[w]
+        inbound=[x for x in related if x['kind']=='unpaired_internal_incoming']
+        accounts.append({'wallet':w,'minimum_running_net_raw':minimum,
+                         'ending_net_raw':result['wallet_net_raw'][w],
+                         'unresolved_observations':len(related),
+                         'unpaired_incoming_observations':len(inbound),
+                         'routes':dict(Counter(x['route'] for x in related))})
+    return {'tasks':tasks,'negative_net_accounts':accounts,
+            'route_counts':dict(Counter(x['route'] for x in tasks)),
+            'negative_accounts_without_local_unresolved':sum(not x['unresolved_observations'] for x in accounts),
+            'scope':'diagnostic routing of unresolved journal observations; no inferred accounting, owner or actual balance'}
