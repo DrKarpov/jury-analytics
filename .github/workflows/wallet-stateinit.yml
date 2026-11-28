@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - 'scripts/wallet_stateinit.py'
+      - 'scripts/wallet_deployment.py'
+      - 'tests/test_wallet_deployment.py'
       - 'tests/test_wallet_stateinit.py'
       - '.github/workflows/wallet-stateinit.yml'
 permissions:
@@ -12,7 +14,7 @@ permissions:
 jobs:
   inspect:
     runs-on: ubuntu-24.04
-    timeout-minutes: 6
+    timeout-minutes: 8
     steps:
       - uses: actions/checkout@v4
         with:
@@ -32,6 +34,13 @@ jobs:
           git -C store rev-parse HEAD > report/data-ref.txt
           git -C source rev-parse HEAD > report/source-ref.txt
           python3 -u source/scripts/wallet_stateinit.py --store store --out report/stateinit.json
+      - name: Validate linked deployment audit
+        run: python3 -m unittest discover -s source/tests -p test_wallet_deployment.py -v
+      - name: Inspect linked non-mint historical deployments
+        env:
+          TONCENTER_API_KEY: ${{ secrets.TONCENTER_API_KEY }}
+          TONAPI_API_KEY: ${{ secrets.TONAPI_API_KEY }}
+        run: python3 -u source/scripts/wallet_deployment.py --store store --out report/linked-deployments.json --limit 30
       - uses: actions/upload-artifact@v4
         if: always()
         with:
