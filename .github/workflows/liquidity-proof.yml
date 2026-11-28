@@ -1,0 +1,40 @@
+name: Verify historical liquidity settlements
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/liquidity_proof.py'
+      - 'scripts/liquidity_scan.py'
+      - '.github/workflows/liquidity-proof.yml'
+  schedule:
+    - cron: '29 * * * *'
+permissions:
+  contents: write
+concurrency:
+  group: jury-persistent-data
+  cancel-in-progress: false
+jobs:
+  scan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: source
+      - uses: actions/checkout@v4
+        with:
+          ref: data
+          path: store
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate causal liquidity regression
+        run: python3 -m unittest discover -s source/tests -p 'test_liquidity_proof.py' -v
+      - name: Scan and checkpoint historical liquidity evidence
+        env:
+          TONCENTER_API_KEY: ${{ secrets.TONCENTER_API_KEY }}
+          TONAPI_API_KEY: ${{ secrets.TONAPI_API_KEY }}
+        run: |
+          python3 -u source/scripts/liquidity_scan.py --store store --seconds 170
+          bash source/scripts/checkpoint.sh store 'Checkpoint liquidity proof and candidate coverage' liquidity-proof/v1
