@@ -57,7 +57,7 @@ def compare(c,a,wallet):
     p['alternate_success']=a.get('success')
     return p
 
-def pin(center,alternate,wallet):
+def pin_observation(center,alternate,wallet):
     c=center('transactions',{'account':wallet,'sort':'desc','limit':1,'end_utime':ANCHOR})['transactions']
     if len(c)!=1:raise ValueError('no unique wallet tip')
     lt=integer(c[0]['lt'])
@@ -65,7 +65,10 @@ def pin(center,alternate,wallet):
     if len(a)!=1:raise ValueError('alternate wallet tip unavailable')
     r=compare(c[0],a[0],wallet)
     if not 0<r['time']<=ANCHOR:raise ValueError('wallet tip after anchor')
-    return {'tx':r['tx'],'lt':lt,'time':r['time']}
+    return {'tx':r['tx'],'lt':lt,'time':r['time']},r
+
+def pin(center,alternate,wallet):
+    return pin_observation(center,alternate,wallet)[0]
 
 def check_rows(rows,prior,tip):
     if not rows:raise ValueError('empty wallet page')
@@ -77,6 +80,16 @@ def check_rows(rows,prior,tip):
         prev_lt,prev_tx,state=r['lt'],r['tx'],r['state_after']
     if prev_lt==tip['lt'] and prev_tx!=tip['tx']:raise ValueError('wallet tip mismatch')
     return prev_lt,prev_tx,state
+
+def first_page(center,alternate,wallet,tip,prior,size,observation=None):
+    # A freshly pinned one-transaction account already has an independently
+    # compared row. Reuse it only when it proves the entire predecessor chain.
+    if observation is not None and prior==(0,None,None) and observation['previous_lt']==0:
+        if observation['lt']!=tip['lt'] or observation['tx']!=tip['tx'] or observation['time']!=tip['time']:
+            raise ValueError('pinned observation mismatch')
+        check_rows([observation],prior,tip)
+        return [observation]
+    return fetch_page(center,alternate,wallet,tip,prior,size)
 
 def fetch_page(center,alternate,wallet,tip,prior,size):
     p={'sort_order':'asc','limit':size,'before_lt':tip['lt']+1}
@@ -193,13 +206,14 @@ def run(store,center,alternate,pages=24,size=50,seconds=200):
         w=min(options,key=priority)
         try:
             dest=folder/'accounts'/key(w);dest.mkdir(parents=True,exist_ok=True)
+            observation=None
             if w not in states:
-                tip=pin(center,alternate,w)
+                tip,observation=pin_observation(center,alternate,w)
                 r=signed({'version':1,'master_digest':master['digest'],'cutoff':ANCHOR,'wallet':w,'tip':tip})
                 publish(r,dest/'tip.json')
                 states[w]={'tip':tip,'tip_digest':r['digest'],'head':r['digest'],'prior':(0,None,None),'rows':[],'pages':0,'complete':False}
             s=states[w]
-            rows=fetch_page(center,alternate,w,s['tip'],s['prior'],size)
+            rows=first_page(center,alternate,w,s['tip'],s['prior'],size,observation)
             b=signed({'version':1,'wallet':w,'tip_digest':s['tip_digest'],'previous_digest':s['head'],'start_lt':s['prior'][0],'rows':rows})
             path=dest/f"page-{s['pages']:08d}.json"
             if path.exists():raise RuntimeError('wallet page already exists')

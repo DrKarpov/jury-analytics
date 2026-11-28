@@ -1,6 +1,7 @@
 import unittest
 from test_indexer import H
-from wallet_history import graph,check_rows,INTERNAL,inbound_frontier
+from wallet_history import graph,check_rows,INTERNAL,inbound_frontier,first_page
+from unittest.mock import patch
 
 class WalletHistoryTests(unittest.TestCase):
     def test_predecessor_and_state_gap(self):
@@ -49,3 +50,25 @@ class WalletHistoryTests(unittest.TestCase):
         states={b:{'rows':[{'lt':2,'aborted':False,'alternate_success':True,'in':m,'out':[]}]}}
         linked,candidates,edges,matched=graph(states,{b})
         self.assertEqual(candidates,{b});self.assertFalse(inbound_frontier(states,linked,matched))
+
+    def test_fresh_single_transaction_tip_reused_without_network(self):
+        tip={'lt':5,'tx':H('tip'),'time':100}
+        row={'lt':5,'tx':H('tip'),'time':100,'previous_lt':0,'previous_tx':None,'state_before':H('old'),'state_after':H('new')}
+        with patch('wallet_history.fetch_page') as fetch:
+            self.assertEqual(first_page(None,None,'wallet',tip,(0,None,None),100,row),[row])
+            fetch.assert_not_called()
+            with self.assertRaises(ValueError):
+                first_page(None,None,'wallet',tip,(0,None,None),100,{**row,'tx':H('wrong')})
+            with self.assertRaises(ValueError):
+                first_page(None,None,'wallet',tip,(0,None,None),100,{**row,'previous_tx':H('wrong')})
+            fetch.assert_not_called()
+
+    def test_noninitial_tip_or_resumed_account_fetches_full_page(self):
+        tip={'lt':5,'tx':H('tip'),'time':100}
+        row={'lt':5,'tx':H('tip'),'time':100,'previous_lt':2,'previous_tx':H('prior')}
+        with patch('wallet_history.fetch_page',return_value=['page']) as fetch:
+            self.assertEqual(first_page(None,None,'wallet',tip,(0,None,None),100,row),['page'])
+            fetch.assert_called_once_with(None,None,'wallet',tip,(0,None,None),100)
+            fetch.reset_mock()
+            self.assertEqual(first_page(None,None,'wallet',tip,(2,H('prior'),H('state')),100),['page'])
+            fetch.assert_called_once_with(None,None,'wallet',tip,(2,H('prior'),H('state')),100)

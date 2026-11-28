@@ -22,7 +22,7 @@ jobs:
   genesis:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
-    timeout-minutes: 18
+    timeout-minutes: 26
     steps:
       - uses: actions/checkout@v4
         with:
@@ -50,7 +50,7 @@ jobs:
           python3 -u source/scripts/genesis_checkpoint.py master --store store --seconds 240
           bash source/scripts/checkpoint.sh store 'Checkpoint pinned JURY master chain' genesis/v1/master.json
       - name: Continue genesis and linked wallet history in checkpointed rounds
-        timeout-minutes: 8
+        timeout-minutes: 13
         env:
           TONCENTER_API_KEY: ${{ secrets.TONCENTER_API_KEY }}
           TONAPI_API_KEY: ${{ secrets.TONAPI_API_KEY }}
@@ -58,6 +58,11 @@ jobs:
         run: |
           set -euo pipefail
           rounds=1
+          # Do not extend scheduled writer-lock occupancy. On explicit code
+          # changes/manual runs, permit a second bounded wallet pass once mint is complete.
+          if [[ "$EVENT_NAME" != schedule ]] && python3 -c 'import json; from pathlib import Path; p=Path("store/genesis/v1/status.json"); raise SystemExit(0 if p.exists() and json.loads(p.read_text())["pending_receipts"]==0 else 1)'; then
+            rounds=2
+          fi
           for ((i=1; i<=rounds; i++)); do
             echo "Historical backfill round $i/$rounds"
             python3 -u source/scripts/genesis_checkpoint.py receipts --store store --seconds 180 --limit 100
