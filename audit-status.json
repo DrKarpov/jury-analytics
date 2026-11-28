@@ -1,1 +1,1 @@
-{"attempted":625,"candidate_digest":"7cd7b398c0b86bca5b6e95db19b74995e52c676fe4fc1b73e82ecd92bba660f7","matched":529,"mismatch":96,"scope":"seed discovered traces only; not global completeness","status":"partial","total_traces":13542,"unavailable":0}
+{"attempted":650,"candidate_digest":"7cd7b398c0b86bca5b6e95db19b74995e52c676fe4fc1b73e82ecd92bba660f7","matched":550,"mismatch":100,"scope":"seed discovered traces only; not global completeness","status":"partial","total_traces":13542,"unavailable":0}
