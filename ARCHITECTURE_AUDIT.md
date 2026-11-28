@@ -47,3 +47,7 @@ Second real continuation pass 46144762107 resumed six saved accounts with 27 new
 ### Peer prefixes
 
 Run 46145307917 proved 20/20 isolated counterpart observations across 13 peers; one absent from historical graph. Next bounded recovery stage reconstructs full raw predecessor prefixes to pinned counterpart LT/hash, replays activation StateInit, and shadow-projects only completed identity-supported prefixes without overwriting existing observations. This is not yet a moving cursor for new wallets, master discovery or production ledger. The shared writer job budget increases to 20 min; consolidate and measure before production.
+
+### Independent master continuation
+
+Actual schedule run 46150796690 confirms persistent post-anchor pipeline works once unattended; it does not establish 15-minute cadence or 72-hour acceptance. Three peer prefixes now have initial StateInit proof, including the previously unseen peer; two missing historical hashes remain. New master_continuation.py binds the existing master tip to raw exact transaction evidence and reuses the shared account continuation cursor and receipt verification, storing isolated master evidence and opcode observations. It does not establish supply, mint/burn semantics, finalized-block coverage or automatically integrate new roots. Verify actual output, then unify peer/master roots and ongoing cursor before scaling. Avoid indefinite addition of separate polling stages; measure/consolidate writer occupancy.
