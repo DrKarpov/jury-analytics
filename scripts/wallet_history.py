@@ -104,32 +104,64 @@ def load_wallets(folder,master_digest):
         states[wallet]={'tip':tip,'tip_digest':r['digest'],'head':head,'prior':prev,'rows':rows,'pages':count,'complete':prev[0]==tip['lt']}
     return states
 
+def valid_internal(m,w,direction):
+    if not m or m['token_opcode']!=INTERNAL or m['bounced'] is not False:
+        return False
+    if not m['source'] or not m['destination'] or m['source']==TOKEN or m['destination']==TOKEN:
+        return False
+    return (m[direction]==w and m['amount_raw'] is not None and integer(m['amount_raw'])>0)
+
+def successful(r):
+    return r['aborted'] is False and r['alternate_success'] is True
+
 def graph(states,roots):
-    # A root is a successful master receipt. Other accounts are candidates until a
-    # matching successful incoming message is found on their independently compared chain.
-    incoming={}
+    # Build the two indexes once. A new account becomes linked only through
+    # a successful exact send/receipt pair, in either direction.
+    incoming={};outgoing={}
     for w,s in states.items():
         for r in s['rows']:
+            if not successful(r):continue
             m=r['in']
-            if m and m['token_opcode']==INTERNAL and m['destination']==w:
+            if valid_internal(m,w,'destination'):
                 if m['hash'] in incoming:raise ValueError('duplicate internal message receipt')
                 incoming[m['hash']]=(w,r,m)
+            for m in r['out']:
+                if valid_internal(m,w,'source'):
+                    if m['hash'] in outgoing:raise ValueError('duplicate internal message send')
+                    outgoing[m['hash']]=(w,r,m)
     linked=set(roots);todo=list(sorted(linked));candidates=set(roots);edges={};matched=set()
+    def link(w):
+        candidates.add(w)
+        if w not in linked:linked.add(w);todo.append(w)
+    def match(mid):
+        sent=outgoing.get(mid);received=incoming.get(mid)
+        if sent is None or received is None:return
+        w,r,m=sent;v,tx,n=received
+        if m!=n or tx['lt']<=r['lt']:return
+        matched.add(mid);link(w);link(v)
     while todo:
         w=todo.pop()
         for r in states.get(w,{}).get('rows',[]):
-            if r['aborted'] or r['alternate_success'] is not True:continue
+            if not successful(r):continue
             for m in r['out']:
-                if m['token_opcode']!=INTERNAL or m['source']!=w or m['bounced'] is not False or not m['destination'] or m['destination']==TOKEN or not m['amount_raw'] or integer(m['amount_raw'])<=0:continue
-                if m['hash'] in edges:raise ValueError('duplicate internal message send')
-                edges[m['hash']]=m;candidates.add(m['destination'])
-                target=incoming.get(m['hash'])
-                if not target:continue
-                v,tx,received=target
-                if received!=m or tx['aborted'] or tx['alternate_success'] is not True or tx['lt']<=r['lt']:continue
-                matched.add(m['hash'])
-                if v not in linked:linked.add(v);todo.append(v)
+                if not valid_internal(m,w,'source'):continue
+                edges[m['hash']]=m;candidates.add(m['destination']);match(m['hash'])
+            m=r['in']
+            if valid_internal(m,w,'destination'):
+                candidates.add(m['source']);match(m['hash'])
     return linked,candidates,edges,matched
+
+def inbound_frontier(states,linked,matched):
+    # Unlike outgoing edge counts, these are already observed receipts whose
+    # upstream sender has not yet been independently matched.
+    pending={}
+    for w in linked:
+        for r in states.get(w,{}).get('rows',[]):
+            m=r['in']
+            if successful(r) and valid_internal(m,w,'destination') and m['hash'] not in matched:
+                if m['hash'] in pending:raise ValueError('duplicate pending inbound message')
+                pending[m['hash']]=m
+    return pending
 
 def run(store,center,alternate,pages=24,size=50,seconds=200):
     if not 1<=pages<=100 or not 1<=size<=100 or seconds<=0:raise ValueError('invalid traversal budget')
@@ -153,6 +185,7 @@ def run(store,center,alternate,pages=24,size=50,seconds=200):
         weights=defaultdict(int)
         for mid,m in edges.items():
             if mid not in matched:weights[m['destination']]+=1
+        for m in inbound_frontier(states,linked,matched).values():weights[m['source']]+=1
         def priority(x):
             return (failures.get(x,{}).get('at',0),
                     0 if (weights[x]>0 if done%2==0 else x in roots) else 1,
@@ -180,12 +213,14 @@ def run(store,center,alternate,pages=24,size=50,seconds=200):
             failures[w]={'at':int(time.time()),'reason':type(e).__name__+': '+str(e)[:200]};tried.add(w)
     states=load_wallets(folder,master['digest'])
     linked,candidates,edges,matched=graph(states,roots)
+    upstream=inbound_frontier(states,linked,matched)
     publish(signed({'master_digest':master['digest'],'failures':failures}),pending_path)
     status={'version':1,'master_digest':master['digest'],'cutoff':ANCHOR,'root_wallets':len(roots),
             'linked_accounts':len(linked),'candidate_accounts':len(candidates),'unlinked_candidates':len(candidates-linked),
             'accounts_started':len(states),'linked_chains_complete':sum(states.get(w,{}).get('complete',False) for w in linked),
             'transactions_scanned':sum(len(s['rows']) for s in states.values()),'linked_transactions':sum(len(states.get(w,{}).get('rows',[])) for w in linked),
             'internal_messages':len(edges),'matched_internal_messages':len(matched),'unmatched_internal_messages':len(edges)-len(matched),
+            'unmatched_inbound_messages':len(upstream),'upstream_candidate_accounts':len({m['source'] for m in upstream.values()}),
             'account_gaps':len(failures),'pages_this_run':done,'stop_reason':stop,
             'scope':'two-provider account chain/message linkage at pinned timestamp; no wallet code, token state, balance, burn or completeness certification'}
     publish(signed(status),folder/'status.json');print(status,flush=True)

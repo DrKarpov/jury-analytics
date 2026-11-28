@@ -1,6 +1,6 @@
 import unittest
 from test_indexer import H
-from wallet_history import graph,check_rows,INTERNAL
+from wallet_history import graph,check_rows,INTERNAL,inbound_frontier
 
 class WalletHistoryTests(unittest.TestCase):
     def test_predecessor_and_state_gap(self):
@@ -20,3 +20,32 @@ class WalletHistoryTests(unittest.TestCase):
         target.update(aborted=False,alternate_success=True)
         linked,candidates,edges,matched=graph(states,{a})
         self.assertEqual(linked,{a,b});self.assertEqual(candidates,{a,b,c});self.assertEqual(matched,{m['hash']})
+
+    def test_backward_discovery_requires_exact_successful_sender(self):
+        a,b=('0:'+H(k) for k in ('upstream','root'))
+        m={'hash':H('inbound'),'source':a,'destination':b,'bounced':False,'token_opcode':INTERNAL,'amount_raw':'10'}
+        recv={'lt':2,'aborted':False,'alternate_success':True,'in':m,'out':[]}
+        states={b:{'rows':[recv]}}
+        linked,candidates,edges,matched=graph(states,{b})
+        self.assertEqual(linked,{b});self.assertEqual(candidates,{a,b})
+        self.assertEqual(set(inbound_frontier(states,linked,matched)),{m['hash']})
+        send={'lt':1,'aborted':False,'alternate_success':True,'in':None,'out':[{**m,'amount_raw':'9'}]}
+        states[a]={'rows':[send]}
+        self.assertEqual(graph(states,{b})[0],{b})
+        send['out']=[m];send['lt']=3
+        self.assertEqual(graph(states,{b})[0],{b})
+        send['lt']=1;send['aborted']=True
+        self.assertEqual(graph(states,{b})[0],{b})
+        send['aborted']=False
+        linked,candidates,edges,matched=graph(states,{b})
+        self.assertEqual(linked,{a,b});self.assertEqual(matched,{m['hash']})
+        self.assertEqual(set(edges),matched)
+        self.assertFalse(inbound_frontier(states,linked,matched))
+
+    def test_master_not_scanned_as_wallet(self):
+        from indexer import TOKEN
+        b='0:'+H('root')
+        m={'hash':H('mint'),'source':TOKEN,'destination':b,'bounced':False,'token_opcode':INTERNAL,'amount_raw':'10'}
+        states={b:{'rows':[{'lt':2,'aborted':False,'alternate_success':True,'in':m,'out':[]}]}}
+        linked,candidates,edges,matched=graph(states,{b})
+        self.assertEqual(candidates,{b});self.assertFalse(inbound_frontier(states,linked,matched))

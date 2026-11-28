@@ -66,7 +66,7 @@ jobs:
             bash source/scripts/checkpoint.sh store 'Checkpoint linked JURY wallet history' ':(glob)genesis/v1/wallet-history/accounts/**/*.json' genesis/v1/wallet-history/pending.json genesis/v1/wallet-history/status.json
             python3 -u source/scripts/wallet_reconcile.py --store store
             bash source/scripts/checkpoint.sh store 'Checkpoint wallet delivery reconciliation' genesis/v1/wallet-history/reconciliation.json
-            if python3 -c 'import json; from pathlib import Path; g=Path("store/genesis/v1"); a=json.loads((g/"status.json").read_text()); b=json.loads((g/"wallet-history/status.json").read_text()); raise SystemExit(0 if a["pending_receipts"]==0 and b["candidate_accounts"]==b["linked_chains_complete"] and b["unmatched_internal_messages"]==0 and b["account_gaps"]==0 else 1)'; then
+            if python3 -c 'import json; from pathlib import Path; g=Path("store/genesis/v1"); a=json.loads((g/"status.json").read_text()); b=json.loads((g/"wallet-history/status.json").read_text()); raise SystemExit(0 if a["pending_receipts"]==0 and b["candidate_accounts"]==b["linked_chains_complete"] and b["unmatched_internal_messages"]==0 and b["unmatched_inbound_messages"]==0 and b["account_gaps"]==0 else 1)'; then
               echo 'Pinned master receipts and graph traversal are exhausted; further ledger verification is required.'
               break
             fi

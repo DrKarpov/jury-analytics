@@ -5,7 +5,7 @@ import argparse
 from collections import defaultdict,Counter
 from pathlib import Path
 from genesis_checkpoint import ANCHOR,signed,validate_master,validate_receipt
-from wallet_history import INTERNAL,load_wallets,graph
+from wallet_history import INTERNAL,load_wallets,graph,inbound_frontier
 from incremental import load_history
 from indexer import integer,publish
 from recovery import read
@@ -65,12 +65,18 @@ def compare_history(states,roots,receipts,primary):
         elif not target:reason='recipient_not_scanned'
         gaps.append({'message':mid,'source_wallet':m['source'],'destination_wallet':m['destination'],
                      'amount_raw':m['amount_raw'],'reason':reason})
+    upstream=[]
+    for mid,m in sorted(inbound_frontier(states,linked,matched).items()):
+        source=states.get(m['source'],{})
+        reason='sender_not_scanned' if not source else 'sender_missing_on_complete_chain' if source.get('complete') else 'sender_chain_incomplete'
+        upstream.append({'message':mid,'source_wallet':m['source'],'destination_wallet':m['destination'],'amount_raw':m['amount_raw'],'reason':reason})
     return {'primary_records_at_anchor':len(indexed),'primary_hashes_on_linked_chains':len(set(indexed)&set(observed)),
             'linked_accounts':len(linked),'linked_transactions':len(observed),'linked_messages':len(edges),
             'matched_deliveries':len(matched),'index_hash_amount_candidates':len(covered),
             'matched_status_counts':dict(Counter(x['status'] for x in results)),
             'unmatched_reason_counts':dict(Counter(x['reason'] for x in gaps)),
             'master_receipt_chain_gaps':receipt_gaps,'deliveries':results,'unmatched_messages':gaps,
+            'unmatched_inbound_messages':upstream,'unmatched_inbound_reason_counts':dict(Counter(x['reason'] for x in upstream)),
             'scope':'Diagnostic two-provider matched message deliveries and endpoint hash/amount overlap; not economic trades, complete ledger, owner binding, or proof that missing hashes are omitted transfers.'}
 
 def run(store):
@@ -84,7 +90,7 @@ def run(store):
     r=compare_history(states,{x['wallet'] for x in receipts},receipts,h.transfers)
     out=signed({'version':1,'master_digest':master['digest'],'cutoff':ANCHOR,'history_head':h.head,**r})
     publish(out,folder/'reconciliation.json')
-    print({k:v for k,v in r.items() if k not in ('deliveries','unmatched_messages','master_receipt_chain_gaps')},flush=True)
+    print({k:v for k,v in r.items() if k not in ('deliveries','unmatched_messages','unmatched_inbound_messages','master_receipt_chain_gaps')},flush=True)
     if r['master_receipt_chain_gaps']:raise ValueError('master receipt inconsistent with scanned wallet history')
     return out
 
