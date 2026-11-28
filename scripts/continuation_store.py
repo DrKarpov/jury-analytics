@@ -13,7 +13,7 @@ from genesis_checkpoint import ANCHOR,checked,signed,validate_master,validate_re
 from indexer import digest,integer,publish
 from provider import request,tonapi_request
 from recovery import read
-from wallet_history import graph,key,load_wallets
+from wallet_history import graph,key,load_wallets,successful,valid_internal
 
 def cursor(base):
     require(base['complete'] and base['rows'],'historical account prefix incomplete')
@@ -60,6 +60,58 @@ def next_target(current,target):
     if not current['tip_reached']:return current['target']
     return target if target>current['target'] else None
 
+def select_accounts(eligible,states,cursors,failures,target,now,limit):
+    # Separate discovery from refresh: a growing historical frontier must
+    # never monopolize every slot while already-observed wallets become stale.
+    def priority(w):
+        c=cursors.get(w)
+        return (0 if c and not c['tip_reached'] else 1,
+                max(c['last_observed_at'] if c else 0,failures.get(w,{}).get('at',0)),
+                -sum(x['time']>=ANCHOR-86400 for x in states[w]['rows']),w)
+    todo=sorted((w for w in eligible if (w not in cursors or next_target(cursors[w],target) is not None)
+                 and now-failures.get(w,{}).get('at',0)>=600),key=priority)
+    refresh=[w for w in todo if w in cursors]
+    discovery=[w for w in todo if w not in cursors]
+    # For a one-slot budget alternate by total successfully stored envelopes.
+    if limit==1:
+        first,second=(discovery,refresh) if sum(c['pages'] for c in cursors.values())%2==0 else (refresh,discovery)
+        return (first or second)[:1]
+    selected=[]
+    for i in range(max(len(refresh),len(discovery))):
+        if i<len(refresh):selected.append(refresh[i])
+        if i<len(discovery):selected.append(discovery[i])
+        if len(selected)>=limit:break
+    return selected[:limit]
+
+def post_anchor_frontier(states,cursors,roots):
+    # The graph is the same verifier used by the canonical projection.
+    # A previously unseen peer is a discovery candidate, NOT a verified JURY
+    # wallet or proof of when that account was deployed.
+    combined={w:{'rows':s['rows']+cursors.get(w,{}).get('new_rows',[])} for w,s in states.items()}
+    linked,_,_,matched=graph(combined,roots)
+    _,historical_candidates,_,_=graph(states,roots)
+    edges=[]
+    for w in sorted(linked):
+        for row in combined.get(w,{}).get('rows',[]):
+            if row['time']<=ANCHOR or not successful(row):continue
+            for side,msgs,direction,peer in (('outgoing',row['out'],'source','destination'),
+                                             ('incoming',[row['in']],'destination','source')):
+                for m in msgs:
+                    if not valid_internal(m,w,direction) or m['hash'] in matched:continue
+                    other=m[peer]
+                    state=('has_continuation_cursor' if other in cursors else
+                           'historical_prefix_complete' if states.get(other,{}).get('complete') else
+                           'historical_candidate' if other in historical_candidates else 'not_in_historical_graph')
+                    edges.append({'side':side,'message':m['hash'],'wallet':w,'peer':other,'peer_state':state,
+                                  'transaction':row['tx'],'lt':str(row['lt']),'time':row['time'],'amount_raw':m['amount_raw']})
+    edges.sort(key=lambda e:(e['side'],e['message']))
+    require(len({(e['side'],e['message']) for e in edges})==len(edges),'duplicate post-anchor frontier edge')
+    return {'edges':edges,'unmatched_post_anchor_outgoing':sum(e['side']=='outgoing' for e in edges),
+            'unmatched_post_anchor_incoming':sum(e['side']=='incoming' for e in edges),
+            'frontier_peer_accounts':len({e['peer'] for e in edges}),
+            'peers_not_in_historical_graph':len({e['peer'] for e in edges if e['peer_state']=='not_in_historical_graph'}),
+            'edges_by_peer_state':dict(Counter(e['peer_state'] for e in edges))}
+
 def run(store,center=request,alternate=tonapi_request,limit=12,seconds=90):
     require(1<=limit<=30 and 1<=seconds<=180,'invalid continuation budget')
     g=store/'genesis'/'v1';master=read(g/'master.json');md=master['digest'];messages=validate_master(master)
@@ -81,18 +133,18 @@ def run(store,center=request,alternate=tonapi_request,limit=12,seconds=90):
     failures=dict(old['failures']);require(set(failures)<=eligible,'orphan continuation failure')
     now=int(time.time())
     def get(w):return cursors[w] if w in cursors else cursor(states[w])
-    def priority(w):
-        c=cursors.get(w)
-        return (0 if c and not c['tip_reached'] else 1,
-                max(c['last_observed_at'] if c else 0,failures.get(w,{}).get('at',0)),
-                -sum(x['time']>=ANCHOR-86400 for x in states[w]['rows']),w)
-    todo=sorted((w for w in eligible if (w not in cursors or next_target(cursors[w],target) is not None)
-                 and now-failures.get(w,{}).get('at',0)>=600),key=priority)
+    todo=select_accounts(eligible,states,cursors,failures,target,now,limit)
+    previous_envelopes=sum(c['pages'] for c in cursors.values())
+    previously_observed=set(cursors)
+    previous_projection=Observations()
+    previous_projection.ingest((w,x) for w,s in states.items() for x in s['rows'])
+    previous_projection.ingest((w,x) for w,c in cursors.items() for x in c['new_rows'])
+    previous_events={x['id']:x for x in previous_projection.project(roots)['events']}
     deadline=time.monotonic()+seconds
     if center is request:center=partial(center,deadline=deadline)
     if alternate is tonapi_request:alternate=partial(alternate,deadline=deadline)
-    attempted=written=new_count=0;stop=None
-    for w in todo[:limit]:
+    attempted=written=new_count=resumed=resumed_rows=0;stop=None
+    for w in todo:
         if time.monotonic()>=deadline:stop='budget';break
         attempted+=1;c=get(w);want=next_target(c,target)
         try:
@@ -108,6 +160,7 @@ def run(store,center=request,alternate=tonapi_request,limit=12,seconds=90):
         require(not dest.exists(),'immutable continuation page already exists')
         dest.parent.mkdir(parents=True,exist_ok=True);publish(record,dest)
         cursors[w]=advanced;written+=1;new_count+=len(rows);failures.pop(w,None)
+        if w in previously_observed:resumed+=1;resumed_rows+=len(rows)
     # Cold replay of all saved envelopes verifies durable cursors independently
     # of the just-completed fetch and catches torn/mutated checkpoints.
     restored=load(records,states,eligible,md)
@@ -118,8 +171,14 @@ def run(store,center=request,alternate=tonapi_request,limit=12,seconds=90):
     combined=base.project(roots)
     old_events={x['id']:x for x in before['events']};new_events={x['id']:x for x in combined['events']}
     require(all(new_events.get(k)==v for k,v in old_events.items()),'historical movement changed')
+    require(all(new_events.get(k)==v for k,v in previous_events.items()),'previous continuation movement changed')
+    frontier=post_anchor_frontier(states,restored,roots)
     folder.mkdir(parents=True,exist_ok=True)
     publish(signed({'anchor':ANCHOR,'master_digest':md,'failures':failures}),pending)
+    frontier_record=signed({'version':1,'anchor':ANCHOR,'master_digest':md,'target_timestamp':target,
+                            'projection_digest':digest(combined),**frontier,
+                            'scope':'unpaired post-anchor messages in sampled account chains; peers are candidates, not verified new wallets'})
+    publish(frontier_record,folder/'frontier.json')
     summary={'version':1,'anchor':ANCHOR,'master_digest':md,'target_timestamp':target,
         'eligible_accounts':len(eligible),'accounts_observed':len(restored),
         'accounts_reached_current_target':sum(c['tip_reached'] and c['target']==target for c in restored.values()),
@@ -127,6 +186,10 @@ def run(store,center=request,alternate=tonapi_request,limit=12,seconds=90):
         'total_envelopes':sum(c['pages'] for c in restored.values()),
         'total_new_rows':sum(len(c['new_rows']) for c in restored.values()),
         'attempted_this_run':attempted,'envelopes_this_run':written,'new_rows_this_run':new_count,
+        'replayed_previous_envelopes':previous_envelopes,'resumed_accounts_this_run':resumed,
+        'resumed_rows_this_run':resumed_rows,'new_accounts_this_run':written-resumed,
+        'oldest_account_completed_target':min((c['target'] if c['tip_reached'] else ANCHOR for c in restored.values()),default=ANCHOR),
+        'frontier_digest':frontier_record['digest'],**{k:v for k,v in frontier.items() if k!='edges'},
         'pending_failure_accounts':len(failures),'failure_reasons':dict(Counter(x['reason'] for x in failures.values())),
         'base_matched_deliveries':len(old_events),'combined_matched_deliveries':len(new_events),
         'additional_matched_deliveries':len(new_events)-len(old_events),'projection_digest':digest(combined),

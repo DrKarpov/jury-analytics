@@ -35,3 +35,7 @@ Run 46140769121 verified deterministic shadow projection of 43,377 normalized ro
 ### Persistent continuation slice
 
 Real continuation run 46141040835 proved 173 post-anchor normalized rows and 25 additional paired deliveries on a 12-wallet sample, with exact raw replay. The next implementation `continuation_store.py` persists immutable linked-account envelopes, resumes partial pages at the original pinned target and cold-replays the combined projection. Existing recovery workflow uses its shared writer lock. This is still shadow, bounded to completed historical accounts and a timestamp target; no independent master/new-wallet discovery or global finalized cursor. Validate actual saved status and repeated run before moving to broader discovery.
+
+### Second persistent continuation pass
+
+First permanent pass 46142136509 persisted 194 rows/26 additional matched deliveries on 12/698 eligible accounts, no failures. Queue previously favored all unseen accounts before refreshing saved cursors. New interleaved lanes and explicit resumed counters test real repeated capture; post-anchor unmatched message frontier records candidate peers independently of primary trace classifications. At 698 accounts and 12 per pass, even perfect 15-min cadence needs >=59 runs for one census, so this is an incremental migration/diagnostic primitive, not the final discovery architecture. Next prioritize master/new-peer and finalized block discovery rather than solely scaling polling. Verify actual second pass and retained immutable evidence before extending.

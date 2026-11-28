@@ -2,7 +2,7 @@ import sys,unittest
 from pathlib import Path
 from unittest.mock import patch
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'scripts'))
-from continuation_store import cursor,apply,next_target
+from continuation_store import cursor,apply,next_target,select_accounts,post_anchor_frontier
 from genesis_checkpoint import ANCHOR
 
 W='0:'+'ab'*32
@@ -41,3 +41,27 @@ class PersistentContinuationTests(unittest.TestCase):
                 apply(p,rec(target),W,'master')
         with self.assertRaisesRegex(ValueError,'target rollback'):
             apply(p,rec(target-1),W,'master')
+
+    def test_refresh_slots_not_starved_by_unseen_accounts(self):
+        target=ANCHOR+1000
+        states={w:{'rows':[{'time':ANCHOR}]} for w in ('old','partial','new1','new2','new3','blocked')}
+        cursors={'old':{'target':ANCHOR+1,'tip_reached':True,'last_observed_at':1,'pages':1},
+                 'partial':{'target':ANCHOR+2,'tip_reached':False,'last_observed_at':2,'pages':1}}
+        self.assertEqual(select_accounts(set(states),states,cursors,{'blocked':{'at':1000}},target,1200,4),
+                         ['partial','new1','old','new2'])
+        self.assertEqual(select_accounts({'old'},states,cursors,{},target,1200,4),['old'])
+        self.assertEqual(select_accounts({'new1','new2'},states,cursors,{},target,1200,4),['new1','new2'])
+
+    def test_frontier_reports_candidate_without_promoting_it(self):
+        a,b,c=('0:'+x*64 for x in ('a','b','c'))
+        msg={'hash':'11'*32,'source':a,'destination':b,'amount_raw':'10','bounced':False,'token_opcode':'0x178d4519'}
+        s={'tx':'22'*32,'lt':10,'time':ANCHOR+1,'aborted':False,'alternate_success':True,'in':None,'out':[msg]}
+        r={'tx':'33'*32,'lt':11,'time':ANCHOR+2,'aborted':False,'alternate_success':True,'in':msg,'out':[]}
+        states={a:{'rows':[],'complete':True}}
+        f=post_anchor_frontier(states,{a:{'new_rows':[s]}},{a})
+        self.assertEqual(f['unmatched_post_anchor_outgoing'],1)
+        self.assertEqual(f['peers_not_in_historical_graph'],1)
+        self.assertEqual(f['edges'][0]['peer'],b)
+        states[b]={'rows':[],'complete':True}
+        f=post_anchor_frontier(states,{a:{'new_rows':[s]},b:{'new_rows':[r]}},{a})
+        self.assertEqual(f['edges'],[])
