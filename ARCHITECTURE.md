@@ -30,3 +30,7 @@ D. Migrate analytics only after reconciliation gates, then verify autonomous ope
 ## Current verified gaps (2026-11-28)
 
 Current incremental.py reads Toncenter transfer windows with one-hour overlap, appends normalized batches and classifies provider actions. It does not independently enumerate every new wallet/master chain or capture every raw payload. current_audit.py compares endpoint swap multisets on primary-discovered trace revisions, not independent discovery. genesis backfill pins a fixed timestamp and is not yet a live cursor. Specialized repair, LP and arbitrage modules are not a unified canonical ledger. Actual schedule records show main recovery runs at 23:20 UTC Nov 27 and 04:46 UTC Nov 28 despite a 15-minute configured cron. This is an operational reliability gap, not proof of an exact root cause. Existing tests and checkpoints are valuable but do not certify production readiness.
+
+## Implementation checkpoint
+
+See [ARCHITECTURE_AUDIT.md](ARCHITECTURE_AUDIT.md) for the inspected baseline and migration sequence. The initial canonical internal-delivery shadow is a limited reusable projection on already verified normalized rows; actual live ingestion parity, full raw proof and ledger gates remain open.

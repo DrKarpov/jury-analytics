@@ -1,0 +1,39 @@
+name: Replay canonical movement shadow
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/canonical_movements.py'
+      - 'tests/test_canonical_movements.py'
+      - '.github/workflows/canonical-shadow.yml'
+permissions:
+  contents: read
+jobs:
+  replay:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: source
+      - uses: actions/checkout@v4
+        with:
+          ref: data
+          path: store
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate canonical projection
+        run: python3 -m unittest discover -s source/tests -p test_canonical_movements.py -v
+      - name: Replay pinned normalized historical observations
+        run: |
+          mkdir -p report
+          git -C store rev-parse HEAD > report/data-ref.txt
+          git -C source rev-parse HEAD > report/source-ref.txt
+          python3 -u source/scripts/canonical_movements.py --store store --out report/shadow.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: canonical-movement-shadow
+          path: report/
