@@ -1,0 +1,39 @@
+name: Audit saved JURY wallet StateInit
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/wallet_stateinit.py'
+      - 'tests/test_wallet_stateinit.py'
+      - '.github/workflows/wallet-stateinit.yml'
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: source
+      - uses: actions/checkout@v4
+        with:
+          ref: data
+          path: store
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate ordinary cell and StateInit parser
+        run: python3 -m unittest discover -s source/tests -p test_wallet_stateinit.py -v
+      - name: Replay saved mint receipt StateInit evidence
+        run: |
+          mkdir -p report
+          git -C store rev-parse HEAD > report/data-ref.txt
+          git -C source rev-parse HEAD > report/source-ref.txt
+          python3 -u source/scripts/wallet_stateinit.py --store store --out report/stateinit.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wallet-stateinit-diagnostic
+          path: report/
