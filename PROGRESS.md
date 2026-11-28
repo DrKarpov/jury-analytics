@@ -55,3 +55,7 @@ Next implementation: reuse the freshly double-checked pinned tip for a single-tr
 ## Offline StateInit diagnostic — implementation checkpoint
 
 While genesis run [46137620539](https://github.com/DrKarpov/jury-analytics/actions/runs/46137620539) continues, Python/JS and genesis regression steps on 5c345a3 passed. Saved mint receipts contain dual-provider StateInit BOCs. Added a read-only diagnostic for ordinary level-zero BOCs: independently recompute representation hashes, compare provider roots, require the derived recipient address and observed historical code hash, then inspect the candidate zero-balance/owner/master data prefix. Unknown formats, mismatches and conflicting candidates remain unresolved. This is not verified owner binding or a balance ledger. The dedicated workflow reads the pinned checkout and produces a report artifact without a data-branch writer or API calls. Parser tests and real diagnostic results must be checked before any promotion. Full traversal remains stage 1 priority.
+
+## StateInit isolated test runner fix
+
+[Run 46137748572](https://github.com/DrKarpov/jury-analytics/actions/runs/46137748572) failed before replay: ModuleNotFoundError for wallet_stateinit. Full test discovery had inherited scripts/ on sys.path from other test modules; isolated discovery did not. The test now explicitly initializes the same scripts path as test_indexer.py. No test assertions or evidence acceptance rules weakened. Real receipt replay remains unverified until the replacement run completes.

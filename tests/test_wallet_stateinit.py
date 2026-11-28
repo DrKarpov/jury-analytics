@@ -1,4 +1,6 @@
-import unittest,hashlib
+import unittest,hashlib,sys
+from pathlib import Path
+sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'scripts'))
 from wallet_stateinit import boc,decode_stateinit,prefix,crc32c
 from indexer import TOKEN
 
