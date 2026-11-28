@@ -37,6 +37,7 @@ jobs:
       - name: Validate linked deployment audit
         run: python3 -m unittest discover -s source/tests -p test_wallet_deployment.py -v
       - name: Inspect linked non-mint historical deployments
+        if: github.event_name == 'workflow_dispatch'
         env:
           TONCENTER_API_KEY: ${{ secrets.TONCENTER_API_KEY }}
           TONAPI_API_KEY: ${{ secrets.TONAPI_API_KEY }}

@@ -10,6 +10,9 @@ on:
       - 'scripts/master_history.py'
       - 'scripts/provider.py'
       - 'scripts/wallet_reconcile.py'
+      - 'scripts/wallet_deployment.py'
+      - 'scripts/wallet_stateinit.py'
+      - 'scripts/checkpoint.sh'
       - 'scripts/history_inventory.py'
   schedule:
     - cron: '12 * * * *'
@@ -76,6 +79,15 @@ jobs:
               break
             fi
           done
+      - name: Persist linked wallet deployment observations
+        timeout-minutes: 3
+        continue-on-error: true
+        env:
+          TONCENTER_API_KEY: ${{ secrets.TONCENTER_API_KEY }}
+          TONAPI_API_KEY: ${{ secrets.TONAPI_API_KEY }}
+        run: |
+          python3 -u source/scripts/wallet_deployment.py --store store --out /tmp/linked-deployments.json --limit 30 --seconds 80 --persist
+          bash source/scripts/checkpoint.sh store 'Checkpoint historical wallet deployment observations' genesis/v1/wallet-deployment
       - name: Refresh primary discovery after historical backfill
         timeout-minutes: 6
         continue-on-error: true

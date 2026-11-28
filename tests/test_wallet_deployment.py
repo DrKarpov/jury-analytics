@@ -1,8 +1,8 @@
-import sys,unittest
+import sys,unittest,tempfile
 from pathlib import Path
 from unittest.mock import patch
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'scripts'))
-from wallet_deployment import activation,replay,code_observation,capture
+from wallet_deployment import activation,replay,code_observation,capture,validate_saved,persist_observation,evidence_path,BLOCKED_CODE
 
 W='0:'+'ab'*32
 def row(**updates):
@@ -55,3 +55,28 @@ class DeploymentTests(unittest.TestCase):
         with patch('wallet_deployment.compare',return_value=r),patch('wallet_deployment.inspect_record') as inspect:
             with self.assertRaisesRegex(ValueError,'code_after hash missing'):replay(W,r,raw)
             inspect.assert_not_called()
+
+    def test_persistent_checkpoint_replays_and_cannot_overwrite(self):
+        r=row();raw={'center':{},'alternate':{}}
+        initial={'code_hash':'33'*32}
+        with tempfile.TemporaryDirectory() as d,patch('wallet_deployment.replay',return_value=initial) as check:
+            folder=Path(d)
+            record=persist_observation(folder,W,r,'tip','master',raw,initial,[],'matched')
+            self.assertTrue(evidence_path(folder,W).exists())
+            self.assertEqual(validate_saved(record,W,r,'tip','master'),'matched')
+            with self.assertRaisesRegex(ValueError,'already exists'):
+                persist_observation(folder,W,r,'tip','master',raw,initial,[],'matched')
+            with self.assertRaisesRegex(ValueError,'identity mismatch'):
+                validate_saved(record,W,{**r,'lt':2},'tip','master')
+            with self.assertRaisesRegex(ValueError,'digest mismatch'):
+                validate_saved({**record,'initial':{}},W,r,'tip','master')
+            self.assertEqual(check.call_count,2)
+
+    def test_blocked_checkpoint_does_not_promote_missing_code(self):
+        r=row(code_after=None);raw={'center':{},'alternate':{}}
+        with tempfile.TemporaryDirectory() as d,patch('wallet_deployment.replay',side_effect=ValueError(BLOCKED_CODE)):
+            rec=persist_observation(Path(d),W,r,'tip','master',raw,None,[],'blocked_historical_code')
+            self.assertEqual(validate_saved(rec,W,r,'tip','master'),'blocked_historical_code')
+            with patch('wallet_deployment.replay',return_value={}):
+                with self.assertRaisesRegex(ValueError,'unexpectedly verifies'):
+                    validate_saved(rec,W,r,'tip','master')

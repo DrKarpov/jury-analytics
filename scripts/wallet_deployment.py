@@ -1,11 +1,11 @@
 """Inspect historical deployment transactions of linked JURY accounts.
-Read-only, bounded capture; raw observations must replay against saved account rows.
+Bounded capture; raw observations must replay against saved account rows.
 """
 import argparse,base64,json,time
 from collections import Counter,defaultdict
 from functools import partial
 from pathlib import Path
-from genesis_checkpoint import ANCHOR,validate_master,validate_receipt,signed
+from genesis_checkpoint import ANCHOR,validate_master,validate_receipt,signed,checked
 from indexer import integer,publish
 from provider import request,tonapi_request,paired
 from recovery import read
@@ -74,7 +74,38 @@ def code_observation(state,initial):
     inactive=sum(r['after']!='active' for r in rows)
     return {'active_rows':len(live),'different_code_rows':changes,'missing_code_rows':missing,'inactive_rows':inactive,'chain_complete':state['complete']}
 
-def run(store,out,center=request,alternate=tonapi_request,limit=30,seconds=115):
+BLOCKED_CODE='activation historical code_after hash missing'
+
+def evidence_path(folder,wallet):
+    return folder/(wallet.replace(':','_')+'.json')
+
+def validate_saved(record,wallet,row,tip_digest,master_digest):
+    checked(record)
+    require(record['version']==1 and record['anchor']==ANCHOR and record['master_digest']==master_digest
+            and record['wallet']==wallet and record['activation']==row and record['chain_tip_digest']==tip_digest,
+            'saved activation checkpoint identity mismatch')
+    outcome=record['outcome']
+    if outcome=='matched':
+        require(replay(wallet,row,record['raw'])==record['initial'],'saved activation proof mismatch')
+    elif outcome=='blocked_historical_code':
+        require(row.get('code_after') is None,'blocked activation has observed code')
+        try:replay(wallet,row,record['raw'])
+        except ValueError as e:require(str(e)==BLOCKED_CODE,'saved blocked reason differs')
+        else:raise ValueError('blocked activation unexpectedly verifies')
+    else:raise ValueError('unsupported saved activation outcome')
+    return outcome
+
+def persist_observation(folder,wallet,row,tip_digest,master_digest,raw,initial,attempts,outcome):
+    folder.mkdir(parents=True,exist_ok=True)
+    path=evidence_path(folder,wallet)
+    require(not path.exists(),'activation checkpoint already exists')
+    record=signed({'version':1,'anchor':ANCHOR,'master_digest':master_digest,'wallet':wallet,'activation':row,
+                   'chain_tip_digest':tip_digest,'raw':raw,'initial':initial,'attempts':attempts,'outcome':outcome})
+    validate_saved(record,wallet,row,tip_digest,master_digest)
+    publish(record,path)
+    return record
+
+def run(store,out,center=request,alternate=tonapi_request,limit=30,seconds=115,persist=False):
     require(1<=limit<=60 and 1<=seconds<=180,'invalid deployment audit budget')
     g=store/'genesis'/'v1';master=read(g/'master.json');messages=validate_master(master)
     roots=set();mint=defaultdict(list)
@@ -96,18 +127,43 @@ def run(store,out,center=request,alternate=tonapi_request,limit=30,seconds=115):
         row,why=activation(state)
         if why:unavailable.append({'wallet':w,'reason':why});continue
         queue.append((w,row))
+    # Persistent evidence is bound to the immutable activation row and tip,
+    # not to a mutable report or current balance. Revalidate on every run.
+    folder=g/'wallet-deployment'/'observations'
+    saved={};blocked={};remaining=[]
+    for wallet,row in queue:
+        path=evidence_path(folder,wallet)
+        if persist and path.exists():
+            record=read(path)
+            outcome=validate_saved(record,wallet,row,states[wallet]['tip_digest'],master['digest'])
+            (saved if outcome=='matched' else blocked)[wallet]=record
+        else:remaining.append((wallet,row))
+    if persist and folder.exists():
+        known={evidence_path(folder,w) for w,_ in queue}
+        require(set(folder.glob('*.json'))<=known,'orphan activation checkpoint')
+    # Prioritize rows that actually expose historical code; then preserve
+    # missing-code observations once, without endlessly repeating the same lookup.
+    if persist:remaining.sort(key=lambda x:(x[1].get('code_after') is None,x[0]))
+    before_saved=len(saved);before_blocked=len(blocked)
     deadline=time.monotonic()+seconds
     if center is request:center=partial(center,deadline=deadline)
     if alternate is tonapi_request:alternate=partial(alternate,deadline=deadline)
     records=[];failures=[];attempted=0;stop=None
-    for w,row in queue[:limit]:
+    for w,row in remaining[:limit]:
         if time.monotonic()>=deadline:stop='budget';break
         attempted+=1;attempts=[]
         try:raw,initial=capture(w,row,center,alternate,attempts)
         except OSError as e:
             stop=type(e).__name__;failures.append({'wallet':w,'tx':row['tx'],'reason':str(e),'attempts':attempts});break
         except (ValueError,KeyError,TypeError,AttributeError,IndexError) as e:
-            failures.append({'wallet':w,'tx':row['tx'],'reason':str(e),'attempts':attempts});continue
+            failures.append({'wallet':w,'tx':row['tx'],'reason':str(e),'attempts':attempts})
+            if persist and str(e)==BLOCKED_CODE and attempts and attempts[-1].get('error')==BLOCKED_CODE:
+                blocked[w]=persist_observation(folder,w,row,states[w]['tip_digest'],master['digest'],
+                    attempts[-1]['raw'],None,attempts,'blocked_historical_code')
+            continue
+        if persist:
+            saved[w]=persist_observation(folder,w,row,states[w]['tip_digest'],master['digest'],
+                raw,initial,attempts,'matched')
         records.append({'wallet':w,'activation':row,'chain_tip_digest':states[w]['tip_digest'],
                         'initial':initial,'code_observation':code_observation(states[w],initial),'raw':raw,'capture_method':attempts[-1]['method'],'attempts':attempts})
     summary={'anchor':ANCHOR,'master_digest':master['digest'],'root_wallets':len(roots),'linked_accounts':len(linked),
@@ -118,15 +174,21 @@ def run(store,out,center=request,alternate=tonapi_request,limit=30,seconds=115):
              'activation_candidates':len(queue),'unavailable_activations':len(unavailable),
              'unavailable_reasons':dict(Counter(x['reason'] for x in unavailable)),
              'attempted':attempted,'matching_initial_state':len(records),'failed':len(failures),
-             'unattempted_candidates':len(queue)-attempted,'failure_reasons':dict(Counter(x['reason'] for x in failures)),
+             'unattempted_candidates':len(remaining)-attempted,
+             'persistent_mode':persist,'persisted_matches':len(saved),'persisted_blocked_historical_code':len(blocked),
+             'replayed_matches':before_saved,'replayed_blocked_historical_code':before_blocked,
+             'persistent_unresolved_candidates':len(queue)-len(saved)-len(blocked) if persist else None,'failure_reasons':dict(Counter(x['reason'] for x in failures)),
              'verified_with_different_code':sum(x['code_observation']['different_code_rows']>0 for x in records),
              'verified_with_missing_code':sum(x['code_observation']['missing_code_rows']>0 for x in records),
              'capture_methods':dict(Counter(x['capture_method'] for x in records)),
              'first_attempt_errors':dict(Counter(x['attempts'][0]['error'] for x in records+failures if x['attempts'] and 'error' in x['attempts'][0])),
              'stop_reason':stop,'scope':'Bounded linked non-mint initial activation and historical code observations; not owner persistence, block proof, balance or trade classification'}
     publish(signed({**summary,'records':records,'failures':failures,'unavailable':unavailable,'root_code_checks':root_checks}),out)
+    if persist:
+        publish(signed({**summary,'observation_digests':{w:x['digest'] for w,x in sorted({**saved,**blocked}.items())}}),
+                g/'wallet-deployment'/'status.json')
     print('LINKED DEPLOYMENT DIAGNOSTIC',json.dumps(summary,sort_keys=True),flush=True)
     return summary
 
 if __name__=='__main__':
-    p=argparse.ArgumentParser();p.add_argument('--store',type=Path,required=True);p.add_argument('--out',type=Path,required=True);p.add_argument('--limit',type=int,default=30);a=p.parse_args();run(a.store,a.out,limit=a.limit)
+    p=argparse.ArgumentParser();p.add_argument('--store',type=Path,required=True);p.add_argument('--out',type=Path,required=True);p.add_argument('--limit',type=int,default=30);p.add_argument('--seconds',type=int,default=115);p.add_argument('--persist',action='store_true');a=p.parse_args();run(a.store,a.out,limit=a.limit,seconds=a.seconds,persist=a.persist)
