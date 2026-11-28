@@ -9,7 +9,7 @@ def address_cell(w):
     top=bits+'1'+'0'*((-len(bits)-1)%8)
     payload=int(top,2).to_bytes(len(top)//8,'big')
     cell=bytes([0,len(bits)//8+(len(bits)+7)//8])+payload
-    return {'type':'cell','cell':(bytes.fromhex('b5ee9c7201010101')+bytes([len(cell),0])+cell).hex()}
+    return {'type':'cell','cell':(bytes.fromhex('b5ee9c720101010100')+bytes([len(cell),0])+cell).hex()}
 
 def result(s):return {'success':True,'exit_code':0,'stack':s}
 
@@ -25,6 +25,12 @@ class IdentityTests(unittest.TestCase):
         w,o,wg,mg,c=self.fixture()
         self.assertEqual(addr(wg['stack'][1]),o)
         self.assertEqual(validate(w,wg,mg,c)['owner'],o)
+    def test_reject_malformed_address_header(self):
+        w,o,wg,mg,c=self.fixture()
+        broken=address_cell(o)
+        raw=bytes.fromhex(broken['cell'])
+        broken['cell']=(raw[:8]+raw[9:]).hex()
+        with self.assertRaisesRegex(ValueError,'BOC cardinality'):addr(broken)
     def test_reject_wrong_master_mapping(self):
         w,o,wg,mg,c=self.fixture();mg['stack']=[address_cell(o)]
         with self.assertRaises(ValueError):validate(w,wg,mg,c)
