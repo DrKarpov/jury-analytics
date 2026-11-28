@@ -2,9 +2,9 @@ import sys,unittest
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'scripts'))
 from canonical_movements import Observations
-from delivery_journal import build,preserve
+from delivery_journal import build,preserve,signed_delta
 from genesis_checkpoint import ANCHOR
-from indexer import TOKEN
+from indexer import TOKEN,integer
 A='0:'+'a'*64
 B='0:'+'b'*64
 def msg(mid,src,dst,amount):
@@ -45,3 +45,20 @@ class DeliveryJournalTests(unittest.TestCase):
         x=build(obs([(A,R),(A,{**S,'out':[burn]})]),{A},E,P,ANCHOR)
         self.assertEqual(x['journal_entry_count'],2)
         self.assertEqual(x['unresolved_counts'],{'burn_semantics_unverified':1})
+
+    def test_signed_postings_keep_external_amount_validation_strict(self):
+        for value,expected in [('0',0),('-30',-30),('30',30),('-900719925474099312345',-900719925474099312345)]:
+            self.assertEqual(signed_delta(value),expected)
+        for value in (True,False,None,1,-1,1.5,'','-0','01','-01','+1','1.0','1e3',' 1','1\n','١'):
+            with self.subTest(value=value),self.assertRaisesRegex(ValueError,'invalid signed journal delta'):
+                signed_delta(value)
+        with self.assertRaisesRegex(ValueError,'invalid amount'):
+            integer('-30')
+        invalid={**E[M['hash']],'amount_raw':'-100'}
+        with self.assertRaisesRegex(ValueError,'invalid amount'):
+            build(obs([(A,R)]),{A},{M['hash']:invalid},P,ANCHOR)
+    def test_negative_partial_net_is_not_lost_or_clamped(self):
+        x=build(obs([(A,S),(B,T)]),{A},E,P,ANCHOR)
+        self.assertEqual(x['wallet_net_raw'],{A:'-30',B:'30'})
+        self.assertEqual(x['negative_running_minima_raw'],{A:'-30'})
+        self.assertEqual(x['accounted_wallet_net_raw'],'0')

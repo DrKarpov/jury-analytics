@@ -3,6 +3,7 @@
 This is a shadow journal of accounted observations, not a balance or supply
 certificate. Unpaired, failed, bounced and burn evidence is not guessed.
 """
+import re
 from collections import Counter,defaultdict
 from continuation_shadow import require
 from indexer import TOKEN,digest,integer
@@ -10,6 +11,12 @@ from wallet_history import graph,successful,valid_internal,INTERNAL
 
 RULE='delivery_journal_v1'
 MASTER_ACCOUNT='external:master_distributions'
+
+def signed_delta(value):
+    """Journal deltas are signed; external token amounts remain unsigned."""
+    if type(value) is not str or not re.fullmatch(r'0|-?[1-9][0-9]*',value):
+        raise ValueError('invalid signed journal delta')
+    return int(value)
 
 def build(obs,roots,emissions,receipts,cutoff):
     states=defaultdict(lambda:{'rows':[]})
@@ -81,16 +88,16 @@ def build(obs,roots,emissions,receipts,cutoff):
     ordered=sorted(entries.values(),key=lambda e:(integer(e['lt']),e['id']))
     totals=defaultdict(int);negative=set();minima=defaultdict(int)
     for e in ordered:
-        require(sum(integer(x['delta_raw']) for x in e['postings'])==0,'unbalanced journal entry')
+        require(sum(signed_delta(x['delta_raw']) for x in e['postings'])==0,'unbalanced journal entry')
         for x in e['postings']:
-            ac=x['account'];totals[ac]+=integer(x['delta_raw'])
+            ac=x['account'];totals[ac]+=signed_delta(x['delta_raw'])
             if ac in linked:
                 minima[ac]=min(minima[ac],totals[ac])
                 if totals[ac]<0:negative.add(ac)
     require(sum(totals.values())==0,'journal conservation failure')
     require(all(v==0 for k,v in totals.items() if k.startswith('transit:')),'paired transit does not close')
     wallet_totals={w:str(totals[w]) for w in sorted(linked)}
-    accounted=sum(integer(v) for v in wallet_totals.values())
+    accounted=sum(signed_delta(v) for v in wallet_totals.values())
     external=-totals.get(MASTER_ACCOUNT,0)
     require(accounted==external,'wallet posting total differs from source postings')
     exceptions=[gaps[k] for k in sorted(gaps)]
@@ -100,7 +107,7 @@ def build(obs,roots,emissions,receipts,cutoff):
             'accounted_wallet_net_raw':str(accounted),'journal_entry_count':len(ordered),
             'unresolved_counts':dict(Counter(g['kind'] for g in exceptions)),
             'wallets_with_negative_running_net':len(negative),
-            'wallets_with_negative_ending_net':sum(integer(v)<0 for v in wallet_totals.values()),
+            'wallets_with_negative_ending_net':sum(signed_delta(v)<0 for v in wallet_totals.values()),
             'journal':ordered,'unresolved':exceptions,'wallet_net_raw':wallet_totals,
             'negative_running_minima_raw':{w:str(minima[w]) for w in sorted(negative)},
             'scope':'paired delivery postings only; negative observed nets indicate incomplete or unsupported accounting, not actual negative balances; no burn/supply/owner/balance certification'}
