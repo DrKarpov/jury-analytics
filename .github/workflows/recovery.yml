@@ -1,6 +1,12 @@
 name: Update and audit persistent history
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/continuation_store.py'
+      - 'tests/test_continuation_store.py'
+      - '.github/workflows/recovery.yml'
   schedule:
     - cron: '7,22,37,52 * * * *'
 permissions:
@@ -13,7 +19,7 @@ jobs:
   ingest:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
-    timeout-minutes: 11
+    timeout-minutes: 14
     steps:
       - uses: actions/checkout@v4
         with:
@@ -63,3 +69,13 @@ jobs:
         run: |
           python3 -u source/scripts/holder_state.py --store store
           bash source/scripts/checkpoint.sh store 'Checkpoint independent holder observation' holders/latest.json holders/status.json ':(glob)holders/daily/*.json'
+      - name: Persist verified post-anchor continuation shadow
+        timeout-minutes: 3
+        continue-on-error: true
+        env:
+          TONCENTER_API_KEY: ${{ secrets.TONCENTER_API_KEY }}
+          TONAPI_API_KEY: ${{ secrets.TONAPI_API_KEY }}
+        run: |
+          python3 -m unittest discover -s source/tests -p test_continuation_store.py -v
+          python3 -u source/scripts/continuation_store.py --store store --limit 12 --seconds 90
+          bash source/scripts/checkpoint.sh store 'Checkpoint post-anchor continuation shadow' continuation/v1

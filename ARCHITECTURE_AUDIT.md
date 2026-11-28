@@ -31,3 +31,7 @@ No public data model or legacy classifications changed by slice 1. Work on the b
 ### Verified slice 1 and next implementation
 
 Run 46140769121 verified deterministic shadow projection of 43,377 normalized rows and 19,614 matched deliveries. Slice 2 begins with `continuation_shadow.py`: bounded real post-anchor account capture with raw evidence and exact predecessor replay through shared comparator/projection. Target is the saved primary timestamp, not a finalized global block cursor. New accounts/master discovery, durable cursor and actual complete live parity are still open. Do not promote shadow output to public analytics.
+
+### Persistent continuation slice
+
+Real continuation run 46141040835 proved 173 post-anchor normalized rows and 25 additional paired deliveries on a 12-wallet sample, with exact raw replay. The next implementation `continuation_store.py` persists immutable linked-account envelopes, resumes partial pages at the original pinned target and cold-replays the combined projection. Existing recovery workflow uses its shared writer lock. This is still shadow, bounded to completed historical accounts and a timestamp target; no independent master/new-wallet discovery or global finalized cursor. Validate actual saved status and repeated run before moving to broader discovery.
