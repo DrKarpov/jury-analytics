@@ -43,3 +43,7 @@ First permanent pass 46142136509 persisted 194 rows/26 additional matched delive
 ### Message-directed discovery
 
 Second real continuation pass 46144762107 resumed six saved accounts with 27 new rows, 235 cumulative rows and 42 additional paired deliveries. Frontier 151 edges/51 peers including one absent from historical graph. New counterpart_discovery.py captures and persists exact opposite endpoint by message hash, compares both providers and replays immutable evidence. It does not splice isolated rows into account prefixes. Next consume proved peer discovery hints for prefix acquisition and master/block cursors; actual full independent discovery and sustained throughput remain open.
+
+### Peer prefixes
+
+Run 46145307917 proved 20/20 isolated counterpart observations across 13 peers; one absent from historical graph. Next bounded recovery stage reconstructs full raw predecessor prefixes to pinned counterpart LT/hash, replays activation StateInit, and shadow-projects only completed identity-supported prefixes without overwriting existing observations. This is not yet a moving cursor for new wallets, master discovery or production ledger. The shared writer job budget increases to 20 min; consolidate and measure before production.
