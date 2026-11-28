@@ -10,6 +10,8 @@ on:
       - 'scripts/master_continuation.py'
       - 'scripts/unified_shadow.py'
       - 'scripts/delivery_journal.py'
+      - 'scripts/execution_evidence.py'
+      - 'tests/test_execution_evidence.py'
       - 'tests/test_delivery_journal.py'
       - 'scripts/live_pipeline.py'
       - 'tests/test_live_pipeline.py'
@@ -82,7 +84,7 @@ jobs:
           python3 -u source/scripts/holder_state.py --store store
           bash source/scripts/checkpoint.sh store 'Checkpoint independent holder observation' holders/latest.json holders/status.json ':(glob)holders/daily/*.json'
       - name: Validate and run dependency-ordered shadow pipeline
-        timeout-minutes: 8
+        timeout-minutes: 10
         env:
           TONCENTER_API_KEY: ${{ secrets.TONCENTER_API_KEY }}
           TONAPI_API_KEY: ${{ secrets.TONAPI_API_KEY }}
@@ -94,6 +96,7 @@ jobs:
           python3 -m unittest discover -s source/tests -p test_peer_prefix.py -v
           python3 -m unittest discover -s source/tests -p test_unified_shadow.py -v
           python3 -m unittest discover -s source/tests -p test_delivery_journal.py -v
+          python3 -m unittest discover -s source/tests -p test_execution_evidence.py -v
           python3 -m unittest discover -s source/tests -p test_live_pipeline.py -v
           python3 -u source/scripts/live_pipeline.py --store store --report pipeline-report/status.json
       - uses: actions/upload-artifact@v4

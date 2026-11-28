@@ -8,6 +8,7 @@ from collections import Counter
 from functools import partial
 from pathlib import Path
 from canonical_movements import Observations
+from execution_evidence import capture as capture_execution
 from delivery_journal import build as build_journal,compact as compact_journal,preserve as preserve_journal,repair_plan
 from continuation_shadow import capture,require
 from continuation_store import cursor,apply,load,next_target
@@ -159,6 +160,10 @@ def run(store,center=request,alternate=tonapi_request,limit=6,seconds=40):
     require(len(plan['tasks'])==len(journal['unresolved']),'ledger repair census mismatch')
     repair_record=signed({'version':1,'anchor':ANCHOR,'master_digest':md,'target_timestamp':target,
                           'ledger_digest':ledger_record['digest'],**plan})
+    execution=capture_execution(folder,obs,plan,md,target,limit=8,seconds=24)
+    execution_record=signed({**execution,'ledger_digest':ledger_record['digest'],'repair_digest':repair_record['digest']})
+    publish(execution_record,folder/'execution-status.json')
+    print('EXECUTION EVIDENCE',json.dumps(execution_record,sort_keys=True),flush=True)
     publish(repair_record,folder/'ledger-repair.json')
     publish(ledger_record,folder/'ledger-status.json')
     print('LEDGER REPAIR',json.dumps({'routes':plan['route_counts'],'negative_accounts':len(plan['negative_net_accounts']),
@@ -187,7 +192,7 @@ def run(store,center=request,alternate=tonapi_request,limit=6,seconds=40):
              'master_new_roots':len(master_roots-roots),'master_roots_without_rows':len(new_root_without_rows),
              'master_receipts_after_target':pending_after_target,'unified_frontier_edges':len(edges),
              'unified_frontier_peers':len({e['peer'] for e in edges}),
-             'frontier_digest':peer_record['digest'],'projection_digest':digest(after),'ledger_digest':ledger_record['digest'],'ledger_repair_digest':repair_record['digest'],
+             'frontier_digest':peer_record['digest'],'projection_digest':digest(after),'ledger_digest':ledger_record['digest'],'ledger_repair_digest':repair_record['digest'],'execution_digest':execution_record['digest'],
              'cold_replay_equal':True,'stop_reason':stop,
              'scope':'unified shadow replay of compared account prefixes and master discovery roots; no isolated counterpart rows, common block completeness, historical owner continuity, balance or trade proof'}
     publish(signed({**summary,'included_wallets':included,'master_roots_without_rows_addresses':sorted(new_root_without_rows)}),folder/'unified-status.json')

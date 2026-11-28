@@ -75,3 +75,7 @@ First journal verified in run 46159846272, 47,638 postings, 623 distributions, d
 ### Negative-net closure priority
 
 46160258449 confirms 49 regular frontier edges closed and 40 fewer unresolved observations, but 14 running/13 ending negative partial nets persist. Twelve historical inbound observations across 12 missing senders and four live. Digest-bound scheduling hints, fresh historical message validation, bounded focus lanes. Acquisition order only, not accounting or completeness proof.
+
+### Execution observation proof
+
+Genesis 46160884988 closed 11/11 remaining focused historical inbound messages in first round, ending with 68 outgoing and one inbound historical gap, 12 missing primary hashes. Prior ledger run preceded this backfill. New execution_evidence.py captures raw exact transaction pairs for unresolved execution cases, binds normalized equality to saved chain and reports execution status without inferring token balance changes or refunds. Existing ledger rules unchanged; no new proof of complete accounting. Need fresh replay incorporating the later genesis checkpoint, verify execution evidence and actual state before classifying failures/bounces.

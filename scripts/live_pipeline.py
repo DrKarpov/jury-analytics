@@ -20,8 +20,8 @@ STAGES=(
      'peer-status.json',('peer-prefixes','peer-status.json','peer-pending.json'),('pending_failure_peers',)),
     ('master','master_continuation.py',('--seconds','55'),80,
      'master/status.json',('master',),('pending_receipts',)),
-    ('unified','unified_shadow.py',('--limit','6','--seconds','40'),65,
-     'unified-status.json',('peer-accounts','unified-status.json','unified-frontier.json','unified-pending.json','ledger-status.json','ledger-repair.json'),('peer_pending_failures','master_roots_without_rows')),
+    ('unified','unified_shadow.py',('--limit','6','--seconds','40'),100,
+     'unified-status.json',('peer-accounts','unified-status.json','unified-frontier.json','unified-pending.json','ledger-status.json','ledger-repair.json','execution-observations','execution-status.json','execution-pending.json'),('peer_pending_failures','master_roots_without_rows')),
 )
 
 def require(ok,message):
@@ -94,6 +94,12 @@ def execute(store,report,runner=subprocess.run):
                         and repair['ledger_digest']==ledger['digest']
                         and len(repair['tasks'])==sum(ledger['combined']['unresolved_counts'].values()),
                         'ledger repair dependency mismatch')
+                execution=checked(read(folder/'execution-status.json'))
+                require(execution['master_digest']==md and execution['target_timestamp']==target
+                        and execution['digest']==status['execution_digest'] and execution['ledger_digest']==ledger['digest']
+                        and execution['repair_digest']==repair['digest'] and execution['cold_replay_equal']
+                        and execution['candidate_message_observations']==repair['route_counts'].get('inspect_raw_execution_and_state',0),
+                        'execution evidence dependency mismatch')
             reasons=classify(name,status,failures)
             runner(['bash',str(HERE/'checkpoint.sh'),str(store),'Checkpoint shadow pipeline: '+name,
                     *['continuation/v1/'+x for x in paths]],check=True,timeout=35)
