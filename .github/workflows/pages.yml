@@ -15,6 +15,7 @@ on:
       - '!scripts/wallet_history.py'
       - '!scripts/wallet_reconcile.py'
       - 'docs/**'
+      - 'tests/**'
 permissions:
   contents: read
 concurrency:
