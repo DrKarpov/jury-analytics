@@ -9,6 +9,8 @@ on:
       - 'scripts/peer_prefix.py'
       - 'scripts/master_continuation.py'
       - 'scripts/unified_shadow.py'
+      - 'scripts/delivery_journal.py'
+      - 'tests/test_delivery_journal.py'
       - 'scripts/live_pipeline.py'
       - 'tests/test_live_pipeline.py'
       - 'tests/test_unified_shadow.py'
@@ -91,6 +93,7 @@ jobs:
           python3 -m unittest discover -s source/tests -p test_counterpart_discovery.py -v
           python3 -m unittest discover -s source/tests -p test_peer_prefix.py -v
           python3 -m unittest discover -s source/tests -p test_unified_shadow.py -v
+          python3 -m unittest discover -s source/tests -p test_delivery_journal.py -v
           python3 -m unittest discover -s source/tests -p test_live_pipeline.py -v
           python3 -u source/scripts/live_pipeline.py --store store --report pipeline-report/status.json
       - uses: actions/upload-artifact@v4

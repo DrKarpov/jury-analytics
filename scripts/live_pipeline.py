@@ -21,7 +21,7 @@ STAGES=(
     ('master','master_continuation.py',('--seconds','55'),80,
      'master/status.json',('master',),('pending_receipts',)),
     ('unified','unified_shadow.py',('--limit','6','--seconds','40'),65,
-     'unified-status.json',('peer-accounts','unified-status.json','unified-frontier.json','unified-pending.json'),('peer_pending_failures','master_roots_without_rows')),
+     'unified-status.json',('peer-accounts','unified-status.json','unified-frontier.json','unified-pending.json','ledger-status.json'),('peer_pending_failures','master_roots_without_rows')),
 )
 
 def require(ok,message):
@@ -81,6 +81,13 @@ def execute(store,report,runner=subprocess.run):
         try:
             runner([sys.executable,'-u',str(HERE/script),'--store',str(store),*args],check=True,timeout=timeout)
             status=validate_status(name,read(folder/status_path),target,md,completed)
+            if name=='unified':
+                ledger=checked(read(folder/'ledger-status.json'))
+                require(ledger['master_digest']==md and ledger['target_timestamp']==target
+                        and ledger['digest']==status['ledger_digest']
+                        and ledger['combined']['projection_digest']==status['projection_digest']
+                        and ledger['duplicate_reverse_replay_equal'] and ledger['historical_postings_preserved'],
+                        'unified ledger dependency mismatch')
             reasons=classify(name,status,failures)
             runner(['bash',str(HERE/'checkpoint.sh'),str(store),'Checkpoint shadow pipeline: '+name,
                     *['continuation/v1/'+x for x in paths]],check=True,timeout=35)

@@ -8,6 +8,7 @@ from collections import Counter
 from functools import partial
 from pathlib import Path
 from canonical_movements import Observations
+from delivery_journal import build as build_journal,compact as compact_journal,preserve as preserve_journal
 from continuation_shadow import capture,require
 from continuation_store import cursor,apply,load,next_target
 from counterpart_discovery import validate,record_key
@@ -54,10 +55,12 @@ def frontier(obs,roots):
 def run(store,center=request,alternate=tonapi_request,limit=6,seconds=40):
     require(1<=limit<=20 and 1<=seconds<=120,'invalid unified peer budget')
     g=store/'genesis'/'v1';master=read(g/'master.json');md=master['digest'];messages=validate_master(master)
-    roots=set()
+    roots=set();historical_receipts={}
+    historical_emissions={k:v for k,v in messages.items() if not v['master_aborted']}
     for path in sorted((g/'receipts').glob('*.json')):
         q=validate_receipt(read(path),messages[path.stem],md)
-        if integer(q['recipient_at'])<=ANCHOR:roots.add(q['wallet'])
+        if integer(q['recipient_at'])<=ANCHOR:
+            roots.add(q['wallet']);historical_receipts[path.stem]=q
     states=load_wallets(g/'wallet-history',md)
     linked,_,_,_=graph(states,roots)
     eligible={w for w in linked if states.get(w,{}).get('complete') and states[w]['rows']}
@@ -68,6 +71,7 @@ def run(store,center=request,alternate=tonapi_request,limit=6,seconds=40):
     cursors=load(folder/'accounts',states,eligible,md)
     obs=Observations()
     obs.ingest((w,x) for w,s in states.items() for x in s['rows'])
+    historical_journal=build_journal(obs,roots,historical_emissions,historical_receipts,ANCHOR)
     obs.ingest((w,x) for w,c in cursors.items() for x in c['new_rows'])
     before=obs.project(roots)
     require(digest(before)==legacy_status['projection_digest'],'legacy continuation projection mismatch')
@@ -125,17 +129,34 @@ def run(store,center=request,alternate=tonapi_request,limit=6,seconds=40):
     require(master_cursor['target']==master_status['cursor_target'],'master cursor status mismatch')
     emitted,_=messages_from(master_cursor['new_rows'])
     master_roots=set();receipt_count=0;pending_after_target=0
+    all_emissions={**historical_emissions,**emitted};all_receipts=dict(historical_receipts)
+    require(len(all_emissions)==len(historical_emissions)+len(emitted),'duplicate master emission across anchor')
     for path in sorted((master_dir/'receipts').glob('*.json')):
         require(path.stem in emitted,'orphan master receipt')
-        _,row=receipt_proof(read(path),emitted[path.stem],md,target)
+        proof,row=receipt_proof(read(path),emitted[path.stem],md,target)
         receipt_count+=1
-        if row['time']<=target:master_roots.add(row['in']['destination'])
+        if row['time']<=target:
+            master_roots.add(row['in']['destination']);all_receipts[path.stem]=proof
         else:pending_after_target+=1
     require(receipt_count==master_status['verified_recipient_deliveries'],'master receipt status mismatch')
     # Exact master receipts establish discovery roots, not permission to insert
     # isolated recipient rows into a complete account prefix.
     all_roots=roots|master_roots
     after=obs.project(all_roots);assert_preserved(before,after)
+    journal=build_journal(obs,all_roots,all_emissions,all_receipts,target)
+    preserve_journal(historical_journal,journal)
+    replay_obs=Observations();items=list(obs.rows.values())
+    replay_obs.ingest(reversed(items));replay_obs.ingest(items)
+    repeated=build_journal(replay_obs,all_roots,dict(reversed(list(all_emissions.items()))),
+                           dict(reversed(list(all_receipts.items()))),target)
+    require(journal==repeated,'journal replay order or duplicate mismatch')
+    require(journal['projection_digest']==digest(after),'journal projection mismatch')
+    ledger_record=signed({'version':1,'anchor':ANCHOR,'master_digest':md,'target_timestamp':target,
+                          'historical':compact_journal(historical_journal),'combined':compact_journal(journal),
+                          'historical_postings_preserved':True,'duplicate_reverse_replay_equal':True,
+                          'scope':'shadow delivery journal; no verified balances, supply, trade labels or PnL'})
+    publish(ledger_record,folder/'ledger-status.json')
+    print('DELIVERY JOURNAL',json.dumps(ledger_record,sort_keys=True),flush=True)
     edges=frontier(obs,all_roots)
     observed_accounts={w for w,_ in obs.rows.values()}
     new_root_without_rows=master_roots-observed_accounts
@@ -159,7 +180,7 @@ def run(store,center=request,alternate=tonapi_request,limit=6,seconds=40):
              'master_new_roots':len(master_roots-roots),'master_roots_without_rows':len(new_root_without_rows),
              'master_receipts_after_target':pending_after_target,'unified_frontier_edges':len(edges),
              'unified_frontier_peers':len({e['peer'] for e in edges}),
-             'frontier_digest':peer_record['digest'],'projection_digest':digest(after),
+             'frontier_digest':peer_record['digest'],'projection_digest':digest(after),'ledger_digest':ledger_record['digest'],
              'cold_replay_equal':True,'stop_reason':stop,
              'scope':'unified shadow replay of compared account prefixes and master discovery roots; no isolated counterpart rows, common block completeness, historical owner continuity, balance or trade proof'}
     publish(signed({**summary,'included_wallets':included,'master_roots_without_rows_addresses':sorted(new_root_without_rows)}),folder/'unified-status.json')
