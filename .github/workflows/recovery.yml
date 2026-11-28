@@ -9,6 +9,8 @@ on:
       - 'scripts/peer_prefix.py'
       - 'scripts/master_continuation.py'
       - 'scripts/unified_shadow.py'
+      - 'scripts/live_pipeline.py'
+      - 'tests/test_live_pipeline.py'
       - 'tests/test_unified_shadow.py'
       - 'tests/test_master_continuation.py'
       - 'tests/test_peer_prefix.py'
@@ -27,7 +29,7 @@ jobs:
   ingest:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
-    timeout-minutes: 24
+    timeout-minutes: 18
     steps:
       - uses: actions/checkout@v4
         with:
@@ -77,53 +79,23 @@ jobs:
         run: |
           python3 -u source/scripts/holder_state.py --store store
           bash source/scripts/checkpoint.sh store 'Checkpoint independent holder observation' holders/latest.json holders/status.json ':(glob)holders/daily/*.json'
-      - name: Persist verified post-anchor continuation shadow
-        timeout-minutes: 3
-        continue-on-error: true
+      - name: Validate and run dependency-ordered shadow pipeline
+        timeout-minutes: 8
         env:
           TONCENTER_API_KEY: ${{ secrets.TONCENTER_API_KEY }}
           TONAPI_API_KEY: ${{ secrets.TONAPI_API_KEY }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
-          python3 -m unittest discover -s source/tests -p test_continuation_store.py -v
-          python3 -u source/scripts/continuation_store.py --store store --limit 12 --seconds 90
-          bash source/scripts/checkpoint.sh store 'Checkpoint post-anchor continuation shadow' continuation/v1
-      - name: Discover exact opposite message endpoints
-        timeout-minutes: 3
-        continue-on-error: true
-        env:
-          TONCENTER_API_KEY: ${{ secrets.TONCENTER_API_KEY }}
-          TONAPI_API_KEY: ${{ secrets.TONAPI_API_KEY }}
-        run: |
+          mkdir -p pipeline-report
+          python3 -m unittest discover -s source/tests -p 'test_*continuation*.py' -v
           python3 -m unittest discover -s source/tests -p test_counterpart_discovery.py -v
-          python3 -u source/scripts/counterpart_discovery.py --store store --limit 20 --seconds 80
-          bash source/scripts/checkpoint.sh store 'Checkpoint post-anchor counterpart discovery' continuation/v1/counterparts continuation/v1/counterpart-status.json continuation/v1/counterpart-pending.json
-      - name: Reconstruct counterpart-pinned peer prefixes
-        timeout-minutes: 3
-        continue-on-error: true
-        env:
-          TONCENTER_API_KEY: ${{ secrets.TONCENTER_API_KEY }}
-          TONAPI_API_KEY: ${{ secrets.TONAPI_API_KEY }}
-        run: |
           python3 -m unittest discover -s source/tests -p test_peer_prefix.py -v
-          python3 -u source/scripts/peer_prefix.py --store store --limit 8 --seconds 55
-          bash source/scripts/checkpoint.sh store 'Checkpoint counterpart-pinned peer prefixes' continuation/v1/peer-prefixes continuation/v1/peer-status.json continuation/v1/peer-pending.json
-      - name: Extend independently observed master account
-        timeout-minutes: 2
-        continue-on-error: true
-        env:
-          TONCENTER_API_KEY: ${{ secrets.TONCENTER_API_KEY }}
-          TONAPI_API_KEY: ${{ secrets.TONAPI_API_KEY }}
-        run: |
-          python3 -m unittest discover -s source/tests -p test_master_continuation.py -v
-          python3 -u source/scripts/master_continuation.py --store store --seconds 55
-          bash source/scripts/checkpoint.sh store 'Checkpoint post-anchor master account' continuation/v1/master
-      - name: Replay unified sources and refresh verified peer cursors
-        timeout-minutes: 2
-        continue-on-error: true
-        env:
-          TONCENTER_API_KEY: ${{ secrets.TONCENTER_API_KEY }}
-          TONAPI_API_KEY: ${{ secrets.TONAPI_API_KEY }}
-        run: |
           python3 -m unittest discover -s source/tests -p test_unified_shadow.py -v
-          python3 -u source/scripts/unified_shadow.py --store store --limit 6 --seconds 40
-          bash source/scripts/checkpoint.sh store 'Checkpoint unified shadow and peer cursors' continuation/v1/peer-accounts continuation/v1/unified-status.json continuation/v1/unified-frontier.json continuation/v1/unified-pending.json
+          python3 -m unittest discover -s source/tests -p test_live_pipeline.py -v
+          python3 -u source/scripts/live_pipeline.py --store store --report pipeline-report/status.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: live-pipeline-stage-report
+          path: pipeline-report/
+          if-no-files-found: warn
