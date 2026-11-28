@@ -15,7 +15,7 @@ git ls-files -z --cached --others --exclude-standard -- "$@" |
     git --literal-pathspecs add -A --pathspec-from-file=- --pathspec-file-nul
 git diff --cached --quiet && exit 0
 
-if [[ -n "$(git diff --cached --name-only --diff-filter=DMRT -- seed updates audit current-audit holders/daily repairs repair-attempts genesis/v1/master.json genesis/v1/receipts genesis/v1/wallet-history/accounts genesis/v1/wallet-deployment/observations continuation/v1/accounts arbitrage/v1/verified)" ]]; then
+if [[ -n "$(git diff --cached --name-only --diff-filter=DMRT -- seed updates audit current-audit holders/daily repairs repair-attempts genesis/v1/master.json genesis/v1/receipts genesis/v1/wallet-history/accounts genesis/v1/wallet-deployment/observations continuation/v1/accounts continuation/v1/counterparts arbitrage/v1/verified)" ]]; then
     echo 'Refusing to change immutable history or audit records' >&2
     exit 1
 fi

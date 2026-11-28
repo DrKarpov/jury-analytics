@@ -39,3 +39,7 @@ Real continuation run 46141040835 proved 173 post-anchor normalized rows and 25 
 ### Second persistent continuation pass
 
 First permanent pass 46142136509 persisted 194 rows/26 additional matched deliveries on 12/698 eligible accounts, no failures. Queue previously favored all unseen accounts before refreshing saved cursors. New interleaved lanes and explicit resumed counters test real repeated capture; post-anchor unmatched message frontier records candidate peers independently of primary trace classifications. At 698 accounts and 12 per pass, even perfect 15-min cadence needs >=59 runs for one census, so this is an incremental migration/diagnostic primitive, not the final discovery architecture. Next prioritize master/new-peer and finalized block discovery rather than solely scaling polling. Verify actual second pass and retained immutable evidence before extending.
+
+### Message-directed discovery
+
+Second real continuation pass 46144762107 resumed six saved accounts with 27 new rows, 235 cumulative rows and 42 additional paired deliveries. Frontier 151 edges/51 peers including one absent from historical graph. New counterpart_discovery.py captures and persists exact opposite endpoint by message hash, compares both providers and replays immutable evidence. It does not splice isolated rows into account prefixes. Next consume proved peer discovery hints for prefix acquisition and master/block cursors; actual full independent discovery and sustained throughput remain open.

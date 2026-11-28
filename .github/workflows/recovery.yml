@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - 'scripts/continuation_store.py'
+      - 'scripts/counterpart_discovery.py'
+      - 'tests/test_counterpart_discovery.py'
       - 'tests/test_continuation_store.py'
       - '.github/workflows/recovery.yml'
   schedule:
@@ -19,7 +21,7 @@ jobs:
   ingest:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
-    timeout-minutes: 14
+    timeout-minutes: 17
     steps:
       - uses: actions/checkout@v4
         with:
@@ -79,3 +81,13 @@ jobs:
           python3 -m unittest discover -s source/tests -p test_continuation_store.py -v
           python3 -u source/scripts/continuation_store.py --store store --limit 12 --seconds 90
           bash source/scripts/checkpoint.sh store 'Checkpoint post-anchor continuation shadow' continuation/v1
+      - name: Discover exact opposite message endpoints
+        timeout-minutes: 3
+        continue-on-error: true
+        env:
+          TONCENTER_API_KEY: ${{ secrets.TONCENTER_API_KEY }}
+          TONAPI_API_KEY: ${{ secrets.TONAPI_API_KEY }}
+        run: |
+          python3 -m unittest discover -s source/tests -p test_counterpart_discovery.py -v
+          python3 -u source/scripts/counterpart_discovery.py --store store --limit 20 --seconds 80
+          bash source/scripts/checkpoint.sh store 'Checkpoint post-anchor counterpart discovery' continuation/v1/counterparts continuation/v1/counterpart-status.json continuation/v1/counterpart-pending.json
