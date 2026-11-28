@@ -1,6 +1,6 @@
 import unittest
 from test_indexer import H
-from wallet_history import graph,check_rows,INTERNAL,inbound_frontier,first_page
+from wallet_history import graph,check_rows,INTERNAL,inbound_frontier,first_page,historic_focus,choose_historical
 from unittest.mock import patch
 
 class WalletHistoryTests(unittest.TestCase):
@@ -72,3 +72,18 @@ class WalletHistoryTests(unittest.TestCase):
             fetch.reset_mock()
             self.assertEqual(first_page(None,None,'wallet',tip,(2,H('prior'),H('state')),100),['page'])
             fetch.assert_called_once_with(None,None,'wallet',tip,(2,H('prior'),H('state')),100)
+
+    def test_historical_focus_only_current_exact_inbound(self):
+        from wallet_history import ANCHOR
+        from collections import defaultdict
+        a,b,c=('0:'+H(k) for k in ('a','b','c'))
+        mid=H('m')
+        m={'source':a,'destination':b,'amount_raw':'10'}
+        task={'message':mid,'peer':a,'wallet':b,'time':ANCHOR,'amount_raw':'10'}
+        self.assertEqual(historic_focus([task],{mid:m},{a,c}),{a:1})
+        self.assertFalse(historic_focus([{**task,'amount_raw':'9'}],{mid:m},{a,c}))
+        self.assertFalse(historic_focus([task],{mid:m},{c}))
+        self.assertFalse(historic_focus([task],{}, {a,c}))
+        weights=defaultdict(int,{a:1,c:100})
+        self.assertEqual(choose_historical([a,c],{}, {c},weights,{a:1},{},0),a)
+        self.assertEqual(choose_historical([a,c],{}, {c},weights,{a:1},{},1),c)

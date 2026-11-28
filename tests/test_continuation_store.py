@@ -2,7 +2,7 @@ import sys,unittest
 from pathlib import Path
 from unittest.mock import patch
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'scripts'))
-from continuation_store import cursor,apply,next_target,select_accounts,post_anchor_frontier
+from continuation_store import cursor,apply,next_target,select_accounts,post_anchor_frontier,live_negative_focus
 from genesis_checkpoint import ANCHOR
 
 W='0:'+'ab'*32
@@ -73,3 +73,15 @@ class PersistentContinuationTests(unittest.TestCase):
         weights={'hot':10,'hot2':9,'blocked':100}
         self.assertEqual(select_accounts(set(states),states,cursors,{'blocked':{'at':1000}},target,1200,4,weights),
                          ['hot','hot2','old','new'])
+
+    def test_negative_inbound_priority_uses_only_eligible_uncovered_peers(self):
+        target=ANCHOR+1000
+        hints=[{'peer':'need','time':ANCHOR+10},{'peer':'already','time':ANCHOR+10},
+               {'peer':'future','time':target+1},{'peer':'unknown','time':ANCHOR+10},
+               {'peer':'old','time':ANCHOR}]
+        cursors={'already':{'target':ANCHOR+11,'tip_reached':True,'last_observed_at':1,'pages':1}}
+        eligible={'need','already','future','old'}
+        focus=live_negative_focus(hints,cursors,eligible,target)
+        self.assertEqual(focus,{'need':1})
+        states={w:{'rows':[{'time':ANCHOR}]} for w in eligible}
+        self.assertEqual(select_accounts(eligible,states,cursors,{},target,1200,2,{'old':100},focus)[0],'need')

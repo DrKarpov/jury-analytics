@@ -13,7 +13,7 @@ from genesis_checkpoint import ANCHOR,checked,signed,validate_master,validate_re
 from indexer import digest,integer,publish
 from provider import request,tonapi_request
 from recovery import read
-from wallet_history import graph,key,load_wallets,successful,valid_internal
+from wallet_history import graph,key,load_wallets,successful,valid_internal,negative_inbound_hints
 
 def cursor(base):
     require(base['complete'] and base['rows'],'historical account prefix incomplete')
@@ -60,7 +60,7 @@ def next_target(current,target):
     if not current['tip_reached']:return current['target']
     return target if target>current['target'] else None
 
-def select_accounts(eligible,states,cursors,failures,target,now,limit,weights=None):
+def select_accounts(eligible,states,cursors,failures,target,now,limit,weights=None,negative_focus=None):
     # Separate discovery from refresh: a growing historical frontier must
     # never monopolize every slot while already-observed wallets become stale.
     def priority(w):
@@ -71,9 +71,9 @@ def select_accounts(eligible,states,cursors,failures,target,now,limit,weights=No
     todo=sorted((w for w in eligible if (w not in cursors or next_target(cursors[w],target) is not None)
                  and now-failures.get(w,{}).get('at',0)>=600),key=priority)
     # Reserve at most half the slots for actual missing counterpart chains.
-    weights=weights or {}
-    focused=sorted((w for w in todo if weights.get(w,0)>0),
-                   key=lambda w:(priority(w)[0],-weights[w],priority(w)[1],w))[:limit//2]
+    weights=weights or {};negative_focus=negative_focus or {}
+    focused=sorted((w for w in todo if weights.get(w,0)>0 or negative_focus.get(w,0)>0),
+                   key=lambda w:(priority(w)[0],-negative_focus.get(w,0),-weights.get(w,0),priority(w)[1],w))[:limit//2]
     todo=[w for w in todo if w not in focused]
     limit-=len(focused)
     if not limit:return focused
@@ -119,6 +119,16 @@ def post_anchor_frontier(states,cursors,roots):
             'peers_not_in_historical_graph':len({e['peer'] for e in edges if e['peer_state']=='not_in_historical_graph'}),
             'edges_by_peer_state':dict(Counter(e['peer_state'] for e in edges))}
 
+def live_negative_focus(hints,cursors,eligible,target):
+    focus=Counter()
+    for task in hints:
+        w=task['peer'];stamp=integer(task['time'])
+        if not ANCHOR<stamp<=target or w not in eligible:continue
+        c=cursors.get(w)
+        if c and c['tip_reached'] and c['target']>=stamp:continue
+        focus[w]+=1
+    return focus
+
 def run(store,center=request,alternate=tonapi_request,limit=12,seconds=90):
     require(1<=limit<=30 and 1<=seconds<=180,'invalid continuation budget')
     g=store/'genesis'/'v1';master=read(g/'master.json');md=master['digest'];messages=validate_master(master)
@@ -142,8 +152,11 @@ def run(store,center=request,alternate=tonapi_request,limit=12,seconds=90):
     def get(w):return cursors[w] if w in cursors else cursor(states[w])
     current_frontier=post_anchor_frontier(states,cursors,roots)
     weights=Counter(e['peer'] for e in current_frontier['edges'] if e['peer'] in eligible)
-    todo=select_accounts(eligible,states,cursors,failures,target,now,limit,weights)
+    hints=negative_inbound_hints(store,md)
+    negative_focus=live_negative_focus(hints,cursors,eligible,target)
+    todo=select_accounts(eligible,states,cursors,failures,target,now,limit,weights,negative_focus)
     focused_selected=sum(bool(weights.get(w)) for w in todo)
+    negative_selected=sum(bool(negative_focus.get(w)) for w in todo)
     prior_frontier={(e['side'],e['message']) for e in current_frontier['edges']}
     previous_envelopes=sum(c['pages'] for c in cursors.values())
     previously_observed=set(cursors)
@@ -199,6 +212,7 @@ def run(store,center=request,alternate=tonapi_request,limit=12,seconds=90):
         'total_new_rows':sum(len(c['new_rows']) for c in restored.values()),
         'attempted_this_run':attempted,'envelopes_this_run':written,'new_rows_this_run':new_count,
         'frontier_priority_candidate_accounts':len(weights),'selected_accounts_with_frontier_messages':focused_selected,
+        'negative_net_inbound_priority_accounts':len(negative_focus),'selected_negative_net_inbound_accounts':negative_selected,
         'prior_frontier_edges_closed':len(prior_frontier-next_frontier),'new_frontier_edges':len(next_frontier-prior_frontier),
         'replayed_previous_envelopes':previous_envelopes,'resumed_accounts_this_run':resumed,
         'resumed_rows_this_run':resumed_rows,'new_accounts_this_run':written-resumed,

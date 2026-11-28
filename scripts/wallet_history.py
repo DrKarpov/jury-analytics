@@ -176,6 +176,41 @@ def inbound_frontier(states,linked,matched):
                 pending[m['hash']]=m
     return pending
 
+def negative_inbound_hints(store,master_digest):
+    # Previous journal is a scheduling hint, never an accounting fact.
+    folder=store/'continuation'/'v1'
+    paths=[folder/x for x in ('ledger-repair.json','ledger-status.json','unified-status.json')]
+    if not all(p.exists() for p in paths):return []
+    repair,ledger,unified=(checked(read(p)) for p in paths)
+    if not (repair['master_digest']==ledger['master_digest']==unified['master_digest']==master_digest
+            and repair['ledger_digest']==ledger['digest']==unified['ledger_digest']
+            and repair['digest']==unified['ledger_repair_digest']
+            and repair['target_timestamp']==ledger['target_timestamp']==unified['target_timestamp']
+            and repair['anchor']==ANCHOR):
+        raise ValueError('journal priority evidence identity mismatch')
+    negative={x['wallet'] for x in repair['negative_net_accounts']}
+    return [x for x in repair['tasks'] if x['kind']=='unpaired_internal_incoming'
+            and x['side']=='incoming' and x['wallet'] in negative
+            and x.get('negative_running_net_wallet') is True]
+
+def historic_focus(hints,upstream,options):
+    result=defaultdict(int)
+    for task in hints:
+        m=upstream.get(task['message'])
+        if (task['time']<=ANCHOR and m and m['source']==task['peer']
+                and m['destination']==task['wallet'] and m['amount_raw']==task['amount_raw']
+                and m['source'] in options):
+            result[m['source']]+=1
+    return result
+
+def choose_historical(options,states,roots,weights,focus,failures,done):
+    focused=[w for w in options if focus.get(w,0)>0]
+    if done%3==0 and focused:
+        return min(focused,key=lambda x:(failures.get(x,{}).get('at',0),-focus[x],-weights[x],states.get(x,{}).get('pages',0),x))
+    return min(options,key=lambda x:(failures.get(x,{}).get('at',0),
+                    0 if (weights[x]>0 if done%2==0 else x in roots) else 1,
+                    -weights[x],states.get(x,{}).get('pages',0),x))
+
 def run(store,center,alternate,pages=24,size=50,seconds=200):
     if not 1<=pages<=100 or not 1<=size<=100 or seconds<=0:raise ValueError('invalid traversal budget')
     g=store/'genesis'/'v1';master=read(g/'master.json');messages=validate_master(master)
@@ -189,6 +224,14 @@ def run(store,center,alternate,pages=24,size=50,seconds=200):
     old=checked(read(pending_path)) if pending_path.exists() else {'master_digest':master['digest'],'failures':{}}
     if old['master_digest']!=master['digest']:raise ValueError('wallet pending identity mismatch')
     failures=old['failures'];deadline=time.monotonic()+seconds;done=0;stop=None;tried=set()
+    hints=negative_inbound_hints(store,master['digest'])
+    initial_linked,_,_,initial_matched=graph(states,roots)
+    initial_upstream=inbound_frontier(states,initial_linked,initial_matched)
+    focused_attempts=0;focused_pages=0
+    focus_messages={x['message'] for x in hints if x['time']<=ANCHOR and x['message'] in initial_upstream
+                    and initial_upstream[x['message']]['source']==x['peer']
+                    and initial_upstream[x['message']]['destination']==x['wallet']
+                    and initial_upstream[x['message']]['amount_raw']==x['amount_raw']}
     while done<pages and time.monotonic()<deadline:
         linked,candidates,edges,matched=graph(states,roots)
         options=[w for w in candidates if not states.get(w,{}).get('complete') and w not in tried]
@@ -198,12 +241,12 @@ def run(store,center,alternate,pages=24,size=50,seconds=200):
         weights=defaultdict(int)
         for mid,m in edges.items():
             if mid not in matched:weights[m['destination']]+=1
-        for m in inbound_frontier(states,linked,matched).values():weights[m['source']]+=1
-        def priority(x):
-            return (failures.get(x,{}).get('at',0),
-                    0 if (weights[x]>0 if done%2==0 else x in roots) else 1,
-                    -weights[x],states.get(x,{}).get('pages',0),x)
-        w=min(options,key=priority)
+        upstream=inbound_frontier(states,linked,matched)
+        for m in upstream.values():weights[m['source']]+=1
+        focus=historic_focus(hints,upstream,set(options))
+        w=choose_historical(options,states,roots,weights,focus,failures,done)
+        focused=bool(focus.get(w))
+        focused_attempts+=int(focused)
         try:
             dest=folder/'accounts'/key(w);dest.mkdir(parents=True,exist_ok=True)
             observation=None
@@ -220,7 +263,7 @@ def run(store,center,alternate,pages=24,size=50,seconds=200):
             prev=check_rows(rows,s['prior'],s['tip'])
             publish(b,path)
             s.update(head=b['digest'],prior=prev,pages=s['pages']+1,complete=prev[0]==s['tip']['lt'])
-            s['rows'].extend(rows);done+=1;failures.pop(w,None)
+            s['rows'].extend(rows);done+=1;focused_pages+=int(focused);failures.pop(w,None)
         except OSError as e:
             stop=type(e).__name__;break
         except (ValueError,KeyError,TypeError,AttributeError) as e:
@@ -236,6 +279,8 @@ def run(store,center,alternate,pages=24,size=50,seconds=200):
             'internal_messages':len(edges),'matched_internal_messages':len(matched),'unmatched_internal_messages':len(edges)-len(matched),
             'unmatched_inbound_messages':len(upstream),'upstream_candidate_accounts':len({m['source'] for m in upstream.values()}),
             'account_gaps':len(failures),'pages_this_run':done,'stop_reason':stop,
+            'negative_net_inbound_hints_at_start':len(focus_messages),'negative_net_inbound_hints_matched':len(focus_messages&matched),
+            'negative_net_inbound_focused_attempts':focused_attempts,'negative_net_inbound_focused_pages':focused_pages,
             'scope':'two-provider account chain/message linkage at pinned timestamp; no wallet code, token state, balance, burn or completeness certification'}
     publish(signed(status),folder/'status.json');print(status,flush=True)
     return status

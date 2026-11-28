@@ -71,3 +71,7 @@ Block pilot 46159331243: both provider enumerations agree for 156 transactions a
 ### Ledger-driven closure feedback
 
 First journal verified in run 46159846272, 47,638 postings, 623 distributions, deterministic replay. Combined 386 unresolved observations, 14 negative running partial nets (13 ending). New repair plan binds unresolved evidence and per-account diagnostics to ledger digest; regular continuation reserves at most half of existing budget for eligible peers from current post-anchor unresolved messages, leaving ordinary refresh/discovery capacity. No posting semantics or public metric changes. Not yet full unified-frontier feedback or finalized balance proof; measure actual closure and route census.
+
+### Negative-net closure priority
+
+46160258449 confirms 49 regular frontier edges closed and 40 fewer unresolved observations, but 14 running/13 ending negative partial nets persist. Twelve historical inbound observations across 12 missing senders and four live. Digest-bound scheduling hints, fresh historical message validation, bounded focus lanes. Acquisition order only, not accounting or completeness proof.
