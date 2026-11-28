@@ -70,11 +70,11 @@ def pin_observation(center,alternate,wallet):
 def pin(center,alternate,wallet):
     return pin_observation(center,alternate,wallet)[0]
 
-def check_rows(rows,prior,tip):
+def check_rows(rows,prior,tip,*,cutoff=ANCHOR):
     if not rows:raise ValueError('empty wallet page')
     prev_lt,prev_tx,state=prior
     for r in rows:
-        if (r['previous_lt'],r['previous_tx'])!=(prev_lt,prev_tx) or not prev_lt<r['lt']<=tip['lt'] or not 0<r['time']<=ANCHOR:
+        if (r['previous_lt'],r['previous_tx'])!=(prev_lt,prev_tx) or not prev_lt<r['lt']<=tip['lt'] or not 0<r['time']<=cutoff:
             raise ValueError('wallet predecessor gap')
         if state is not None and r['state_before']!=state:raise ValueError('wallet state hash gap')
         prev_lt,prev_tx,state=r['lt'],r['tx'],r['state_after']

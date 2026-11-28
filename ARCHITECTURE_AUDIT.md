@@ -27,3 +27,7 @@ Source c885270438b5d351d04c3080df6551336ec573b2; data 0376a2a1aadcbd7ffb0a40def2
 5. Consolidate scheduling and measure actual throughput, data growth, provider failure behavior, and catch-up; choose infrastructure based on evidence, preserve cost constraint.
 
 No public data model or legacy classifications changed by slice 1. Work on the backfill can resume safely independently of the read-only shadow workflow. Before next commit inspect shadow report, CI, and live data refs. Do not declare the architecture gate closed until actual live input feeds this shared path and full replay/catch-up tests pass.
+
+### Verified slice 1 and next implementation
+
+Run 46140769121 verified deterministic shadow projection of 43,377 normalized rows and 19,614 matched deliveries. Slice 2 begins with `continuation_shadow.py`: bounded real post-anchor account capture with raw evidence and exact predecessor replay through shared comparator/projection. Target is the saved primary timestamp, not a finalized global block cursor. New accounts/master discovery, durable cursor and actual complete live parity are still open. Do not promote shadow output to public analytics.

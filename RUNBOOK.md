@@ -77,3 +77,5 @@ Persistent linked deployment evidence is now written by the genesis workflow aft
 ## Обязательный контроль эксплуатации
 
 См. [ARCHITECTURE.md](ARCHITECTURE.md). До финальной приёмки требуется единый исторический/live pipeline, независимый discovery, отдельные watermarks для discovery/verification/publication, измерение реальных cron запусков и backlog age, тесты отказов/late arrivals/replay/restore, минимум 72 часа автономного наблюдения и проверка фактической пропускной способности и стоимости инфраструктуры. Не считать workflow success подтверждением покрытия. Текущие процедуры выше описывают бету, а не завершённую архитектуру.
+
+`canonical_movements.py` and `continuation_shadow.py` are read-only shadow checks. The latter captures raw two-provider account tips/pages at a timestamp cap after the historical anchor, verifies the prior chain and replays them through the same normalized graph projection. It samples complete existing linked accounts, does not yet advance the production cursor, discover all new accounts, or certify a common finalized block boundary. Inspect actual report counts and failure reasons rather than workflow success alone.
