@@ -10,6 +10,7 @@ on:
       - 'scripts/master_history.py'
       - 'scripts/provider.py'
       - 'scripts/wallet_reconcile.py'
+      - 'scripts/history_inventory.py'
   schedule:
     - cron: '12 * * * *'
 permissions:
@@ -39,6 +40,7 @@ jobs:
           python3 -m unittest discover -s source/tests -p test_genesis_checkpoint.py -v
           python3 -m unittest discover -s source/tests -p test_paired_provider.py -v
           python3 -m unittest discover -s source/tests -p 'test_wallet*.py' -v
+          python3 -m unittest discover -s source/tests -p test_history_inventory.py -v
       - name: Recover pinned master chain
         timeout-minutes: 5
         env:
@@ -77,6 +79,11 @@ jobs:
         run: |
           python3 -u source/scripts/incremental.py --store store --max-windows 3
           bash source/scripts/checkpoint.sh store 'Checkpoint primary history after genesis backfill' ':(glob)updates/batch-*.json' update-status.json
+      - name: Inventory all historical token movements and unresolved trace topologies
+        timeout-minutes: 2
+        run: |
+          python3 -u source/scripts/history_inventory.py --store store
+          bash source/scripts/checkpoint.sh store 'Checkpoint complete observed movement inventory' inventory/v1
       - name: Continue independent current trace audit
         timeout-minutes: 4
         continue-on-error: true

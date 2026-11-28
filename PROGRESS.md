@@ -27,3 +27,9 @@
 Отдельный блокер аудита: отрицательные записи delivery repair содержали version=1, валидатор его не принимал. Исправлено в 4a8fffd488eda2de5027b9638f6f65fea632da61; тесты и публикация прошли, повтор workflow аудита на реальных данных ещё не подтверждён.
 
 Арбитраж: 893 подтверждения — реальное продвижение против одного в прошлом, но не все маршруты и не все точные котировки. UI работает как бета, PnL не сертифицирован. Следующему агенту обязательно обновить цифры из фактических data refs и Actions, не использовать этот снимок как вечную истину.
+
+## Follow-up checkpoint — primary mint delivery complete
+
+[Data 27ac9565](https://github.com/DrKarpov/jury-analytics/tree/27ac9565330eff39ce9dd4e85776bfff793b030a): all 623/623 master messages verified (74 new), 2,000,000 JURY delivered, 381 recipient jetton wallets, no pending or failed receipt. [Proof](https://github.com/DrKarpov/jury-analytics/blob/27ac9565330eff39ce9dd4e85776bfff793b030a/genesis/v1/status.json). The wallet graph still needs closure; do not treat this as full history. [Parallel provider implementation](https://github.com/DrKarpov/jury-analytics/commit/47e8763eb3955001e46f386aa29ec538e4b7fb06) passed code tests and publication. Historical backfill run 46135597396 was still in progress when this checkpoint was written.
+
+Next: produce an all-observed movement inventory that separates missing account-chain edges from indexed rows whose economic label is unknown. Topology flags (fan-out/fan-in/chained/cyclic) are review evidence, not proof of split swaps or LP. Historical normalized wallet pages retain only selected token opcodes; complete non-token/bounce payload capture remains open. Inventory is diagnostic; do not alter immutable transfer facts or promote unverified roles.
